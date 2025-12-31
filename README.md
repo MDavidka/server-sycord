@@ -78,14 +78,21 @@ Edit `.env` and set your configuration:
 
 ## MongoDB Document Structure
 
-GitHub tokens should be stored in MongoDB with the following structure:
+GitHub repositories should be stored in MongoDB with the following structure:
 
 ```json
 {
   "_id": ObjectId("6954ed250d9fa1238cb13e3c"),
-  "token": "github_personal_access_token"
+  "owner": "your-github-username",
+  "repo": "your-repository",
+  "token": "github_personal_access_token",
+  "default_branch": "main"
 }
 ```
+
+Use the `token` field for new documents. A legacy `github_token` field is also accepted for backward compatibility. The server will use `token` when it is set, otherwise it will fall back to `github_token`.
+
+The preferred repository field is `repo`. A legacy `name` field is also honored for backward compatibility when `repo` is not present.
 
 ## Usage
 
@@ -117,7 +124,7 @@ gunicorn -w 4 -b 0.0.0.0:5000 app:app
 
 ### GET /api/repos
 
-Fetch GitHub repositories associated with the stored token.
+Fetch GitHub repositories stored in MongoDB (one document per repository).
 
 **Request:**
 ```bash
