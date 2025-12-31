@@ -181,7 +181,7 @@ def get_repository_document_by_id(repo_id, include_tokens=False):
 
 
 def get_repository_name(repo_doc):
-    """Extract repository name from a MongoDB document (prefers 'repo', falls back to 'name')"""
+    """Extract repository name (prefer new 'repo' field, fall back to legacy 'name' field)"""
     return repo_doc.get('repo') or repo_doc.get('name')
 
 
@@ -569,6 +569,7 @@ def get_repos():
             owner = repo_doc.get('owner')
             
             if not owner or not repo_name:
+                logger.warning(f"Skipping repository document missing owner or name: {repo_doc.get('_id')}")
                 continue
             
             formatted_repos.append({
