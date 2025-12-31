@@ -343,7 +343,9 @@ def deploy_to_cloudflare_pages(directory_path, project_name):
             'deploy',
             directory_path,
             '--project-name',
-            project_name
+            project_name,
+            '--branch',
+            'main'
         ]
         
         logger.info(f"Running command: {' '.join(cmd)}")
