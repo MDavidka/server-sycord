@@ -58,16 +58,30 @@ fi
 
 # Step 2: Check for Node.js and npm
 print_status "Checking Node.js installation..."
+INSTALL_NODE=true
+
 if command -v node &> /dev/null; then
-    print_success "Node.js found: $(node --version)"
+    NODE_VERSION=$(node -v)
+    # Extract major version
+    NODE_MAJOR=$(echo "$NODE_VERSION" | cut -d'v' -f2 | cut -d'.' -f1)
+
+    if [ "$NODE_MAJOR" -ge 20 ]; then
+        print_success "Node.js found: $NODE_VERSION"
+        INSTALL_NODE=false
+    else
+        print_warning "Node.js found ($NODE_VERSION) but is older than v20. Updating..."
+    fi
 else
     print_warning "Node.js not found. Installing Node.js..."
-    
+fi
+
+if [ "$INSTALL_NODE" = true ]; then
     # Check OS and install Node.js
     if [ "$(uname)" == "Darwin" ]; then
         # macOS
         if command -v brew &> /dev/null; then
-            brew install node
+            print_status "Upgrading/Installing Node.js via Homebrew..."
+            brew install node || brew upgrade node
         else
             print_error "Please install Homebrew first: https://brew.sh/"
             exit 1
@@ -75,11 +89,12 @@ else
     elif [ -f /etc/debian_version ] || [ -f /etc/redhat-release ]; then
         # Linux (Debian/Ubuntu/RHEL/CentOS)
         if command -v sudo &> /dev/null; then
+            print_status "Installing Node.js via package manager..."
             if [ -f /etc/debian_version ]; then
-                curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+                curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
                 sudo apt-get install -y nodejs
             elif [ -f /etc/redhat-release ]; then
-                curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
+                curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
                 sudo yum install -y nodejs
             fi
         else
@@ -97,9 +112,12 @@ else
             fi
 
             # Install Node.js locally
-            NODE_VERSION="v18.19.0"
-            NODE_DIST="node-$NODE_VERSION-linux-$NODE_ARCH"
-            NODE_URL="https://nodejs.org/dist/$NODE_VERSION/$NODE_DIST.tar.xz"
+            NODE_VERSION_INSTALL="v20.11.1"
+            NODE_DIST="node-$NODE_VERSION_INSTALL-linux-$NODE_ARCH"
+            NODE_URL="https://nodejs.org/dist/$NODE_VERSION_INSTALL/$NODE_DIST.tar.xz"
+
+            # Clean up old local install if it exists
+            rm -rf .node
 
             mkdir -p .node
             print_status "Downloading Node.js from $NODE_URL..."
@@ -112,11 +130,17 @@ else
             fi
         fi
     else
-        print_error "Unsupported OS. Please install Node.js manually."
+        print_error "Unsupported OS. Please install Node.js v20+ manually."
         exit 1
     fi
     
-    print_success "Node.js installed: $(node --version)"
+    # Verify installation
+    if command -v node &> /dev/null; then
+         print_success "Node.js installed: $(node --version)"
+    else
+         print_error "Node.js installation verification failed."
+         exit 1
+    fi
 fi
 
 # Step 3: Check for npm
