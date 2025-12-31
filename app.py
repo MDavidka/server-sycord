@@ -2,8 +2,10 @@ import os
 import subprocess
 import tempfile
 import shutil
+import requests
 from flask import Flask, render_template, request, jsonify
 from pymongo import MongoClient
+from bson import ObjectId
 from dotenv import load_dotenv
 import logging
 from pathlib import Path
@@ -19,13 +21,16 @@ app = Flask(__name__)
 
 # MongoDB configuration
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
-MONGO_DB = os.getenv('MONGO_DB', 'sycord_db')
-MONGO_COLLECTION = os.getenv('MONGO_COLLECTION', 'files')
+MONGO_DB = os.getenv('MONGO_DB', 'test')
+MONGO_COLLECTION = os.getenv('MONGO_COLLECTION', 'github_tokens')
 
 # Cloudflare configuration
 CLOUDFLARE_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN')
 CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')
 CLOUDFLARE_PROJECT_NAME = os.getenv('CLOUDFLARE_PROJECT_NAME')
+
+# Project ID for GitHub token lookup
+PROJECT_ID = os.getenv('PROJECT_ID', '6954ed250d9fa1238cb13e3c')
 
 
 def sanitize_filename(filename):
@@ -71,6 +76,239 @@ def get_mongo_client():
     except Exception as e:
         logger.error(f"Failed to connect to MongoDB: {e}")
         raise
+
+
+def get_github_token_from_mongo():
+    """Retrieve GitHub token from MongoDB based on project ID"""
+    try:
+        client = get_mongo_client()
+        db = client[MONGO_DB]
+        collection = db[MONGO_COLLECTION]
+        
+        # Find the document with the project ID
+        doc = collection.find_one({'_id': ObjectId(PROJECT_ID)})
+        
+        if doc and 'token' in doc:
+            logger.info("Retrieved GitHub token from MongoDB")
+            return doc['token']
+        
+        # Also try looking for github_token field
+        if doc and 'github_token' in doc:
+            logger.info("Retrieved GitHub token from MongoDB")
+            return doc['github_token']
+            
+        logger.warning("GitHub token not found in MongoDB document")
+        return None
+    except Exception as e:
+        logger.error(f"Error retrieving GitHub token from MongoDB: {e}")
+        return None
+    finally:
+        if 'client' in locals():
+            client.close()
+
+
+def get_github_repositories(github_token):
+    """Fetch repositories from GitHub using the token"""
+    if not github_token:
+        logger.error("No GitHub token provided")
+        return []
+    
+    try:
+        headers = {
+            'Authorization': f'token {github_token}',
+            'Accept': 'application/vnd.github.v3+json'
+        }
+        
+        response = requests.get(
+            'https://api.github.com/user/repos',
+            headers=headers,
+            params={'per_page': 100, 'sort': 'updated'},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            repos = response.json()
+            logger.info(f"Fetched {len(repos)} repositories from GitHub")
+            return repos
+        else:
+            logger.error(f"GitHub API error: {response.status_code} - {response.text}")
+            return []
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching GitHub repositories: {e}")
+        return []
+
+
+def download_github_repo(github_token, repo_full_name, branch='main'):
+    """Download a GitHub repository to a temporary directory"""
+    temp_dir = tempfile.mkdtemp(prefix='github_repo_')
+    logger.info(f"Created temporary directory for repo: {temp_dir}")
+    
+    try:
+        # Try to download the repository as a zip archive
+        headers = {
+            'Authorization': f'token {github_token}',
+            'Accept': 'application/vnd.github.v3+json'
+        }
+        
+        # First, try main branch, then master if main fails
+        branches_to_try = [branch, 'main', 'master']
+        
+        for try_branch in branches_to_try:
+            url = f'https://api.github.com/repos/{repo_full_name}/zipball/{try_branch}'
+            response = requests.get(url, headers=headers, stream=True, timeout=120)
+            
+            if response.status_code == 200:
+                # Save the zip file
+                zip_path = os.path.join(temp_dir, 'repo.zip')
+                with open(zip_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                # Extract the zip file
+                import zipfile
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_dir)
+                
+                # Remove the zip file
+                os.remove(zip_path)
+                
+                # Find the extracted directory (GitHub adds a prefix)
+                extracted_dirs = [d for d in os.listdir(temp_dir) 
+                                if os.path.isdir(os.path.join(temp_dir, d))]
+                
+                if extracted_dirs:
+                    # Move contents from extracted dir to temp_dir
+                    extracted_path = os.path.join(temp_dir, extracted_dirs[0])
+                    for item in os.listdir(extracted_path):
+                        src = os.path.join(extracted_path, item)
+                        dst = os.path.join(temp_dir, item)
+                        shutil.move(src, dst)
+                    os.rmdir(extracted_path)
+                
+                logger.info(f"Downloaded repository {repo_full_name} from branch {try_branch}")
+                return temp_dir
+        
+        # If all branches fail
+        logger.error(f"Failed to download repository {repo_full_name}")
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error downloading repository: {e}")
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return None
+
+
+def create_cloudflare_project(project_name):
+    """Create a new Cloudflare Pages project"""
+    if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ACCOUNT_ID:
+        logger.error("Cloudflare credentials not configured")
+        return None
+    
+    try:
+        headers = {
+            'Authorization': f'Bearer {CLOUDFLARE_API_TOKEN}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Create project using Cloudflare API
+        url = f'https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/pages/projects'
+        
+        payload = {
+            'name': project_name,
+            'production_branch': 'main'
+        }
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+        if response.status_code in [200, 201]:
+            result = response.json()
+            if result.get('success'):
+                logger.info(f"Created Cloudflare project: {project_name}")
+                return result.get('result')
+            else:
+                logger.error(f"Cloudflare API error: {result.get('errors')}")
+                return None
+        elif response.status_code == 409:
+            # Project already exists
+            logger.info(f"Cloudflare project already exists: {project_name}")
+            return {'name': project_name}
+        else:
+            logger.error(f"Cloudflare API error: {response.status_code} - {response.text}")
+            return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error creating Cloudflare project: {e}")
+        return None
+
+
+def deploy_to_cloudflare_pages(directory_path, project_name):
+    """Deploy files to Cloudflare Pages using wrangler"""
+    if not CLOUDFLARE_API_TOKEN:
+        raise ValueError("CLOUDFLARE_API_TOKEN not set in environment variables")
+    
+    try:
+        # Set environment variables for wrangler
+        env = os.environ.copy()
+        env['CLOUDFLARE_API_TOKEN'] = CLOUDFLARE_API_TOKEN
+        if CLOUDFLARE_ACCOUNT_ID:
+            env['CLOUDFLARE_ACCOUNT_ID'] = CLOUDFLARE_ACCOUNT_ID
+        
+        # Run wrangler pages deploy command
+        cmd = [
+            'wrangler',
+            'pages',
+            'deploy',
+            directory_path,
+            '--project-name',
+            project_name
+        ]
+        
+        logger.info(f"Running command: {' '.join(cmd)}")
+        
+        result = subprocess.run(
+            cmd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minutes timeout
+        )
+        
+        if result.returncode == 0:
+            logger.info("Deployment successful")
+            logger.info(result.stdout)
+            return {
+                'success': True,
+                'output': result.stdout,
+                'error': None
+            }
+        else:
+            logger.error(f"Deployment failed: {result.stderr}")
+            return {
+                'success': False,
+                'output': result.stdout,
+                'error': result.stderr
+            }
+    except subprocess.TimeoutExpired:
+        logger.error("Deployment timed out")
+        return {
+            'success': False,
+            'output': None,
+            'error': 'Deployment timed out after 5 minutes'
+        }
+    except FileNotFoundError:
+        logger.error("wrangler command not found")
+        return {
+            'success': False,
+            'output': None,
+            'error': 'wrangler CLI not found. Please install it: npm install -g wrangler'
+        }
+    except Exception as e:
+        logger.error(f"Deployment error: {e}")
+        return {
+            'success': False,
+            'output': None,
+            'error': str(e)
+        }
 
 
 def retrieve_files_from_mongo():
@@ -225,32 +463,123 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/api/repos', methods=['GET'])
+def get_repos():
+    """API endpoint to fetch GitHub repositories"""
+    try:
+        logger.info("Fetching GitHub repositories")
+        
+        # Get GitHub token from MongoDB
+        github_token = get_github_token_from_mongo()
+        
+        if not github_token:
+            return jsonify({
+                'success': False,
+                'message': 'GitHub token not found in database',
+                'repositories': []
+            }), 404
+        
+        # Fetch repositories from GitHub
+        repos = get_github_repositories(github_token)
+        
+        # Format repositories for frontend
+        formatted_repos = [
+            {
+                'id': str(repo.get('id')),
+                'name': repo.get('name', 'Unknown'),
+                'full_name': repo.get('full_name', ''),
+                'description': repo.get('description', ''),
+                'default_branch': repo.get('default_branch', 'main'),
+                'private': repo.get('private', False)
+            }
+            for repo in repos
+        ]
+        
+        return jsonify({
+            'success': True,
+            'repositories': formatted_repos
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching repositories: {e}")
+        return jsonify({
+            'success': False,
+            'message': 'Failed to fetch repositories',
+            'error': str(e),
+            'repositories': []
+        }), 500
+
+
 @app.route('/api/deploy', methods=['POST'])
 def deploy():
-    """API endpoint to trigger deployment"""
+    """API endpoint to trigger deployment from GitHub repository"""
     try:
         logger.info("Received deployment request")
         
-        # Retrieve files from MongoDB
-        files = retrieve_files_from_mongo()
+        # Get request data
+        data = request.get_json() or {}
+        repo_id = data.get('repo_id')
         
-        if not files:
+        if not repo_id:
             return jsonify({
                 'success': False,
-                'message': 'No files found in MongoDB'
+                'message': 'Repository ID is required'
+            }), 400
+        
+        # Get GitHub token from MongoDB
+        github_token = get_github_token_from_mongo()
+        
+        if not github_token:
+            return jsonify({
+                'success': False,
+                'message': 'GitHub token not found in database'
             }), 404
         
-        # Save files to temporary directory
-        temp_dir = save_files_to_temp_directory(files)
+        # Get repository details from GitHub
+        repos = get_github_repositories(github_token)
+        
+        # Find the selected repository
+        selected_repo = None
+        for repo in repos:
+            if str(repo.get('id')) == str(repo_id):
+                selected_repo = repo
+                break
+        
+        if not selected_repo:
+            return jsonify({
+                'success': False,
+                'message': 'Repository not found'
+            }), 404
+        
+        repo_full_name = selected_repo.get('full_name')
+        repo_name = selected_repo.get('name')
+        default_branch = selected_repo.get('default_branch', 'main')
+        
+        # Generate Cloudflare project name from repo name (sanitized)
+        import re
+        cf_project_name = re.sub(r'[^a-zA-Z0-9-]', '-', repo_name.lower())[:63]
+        
+        # Create Cloudflare project if it doesn't exist
+        create_cloudflare_project(cf_project_name)
+        
+        # Download repository from GitHub
+        temp_dir = download_github_repo(github_token, repo_full_name, default_branch)
+        
+        if not temp_dir:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to download repository from GitHub'
+            }), 500
         
         try:
             # Deploy to Cloudflare Pages
-            result = deploy_to_cloudflare(temp_dir)
+            result = deploy_to_cloudflare_pages(temp_dir, cf_project_name)
             
             if result['success']:
                 return jsonify({
                     'success': True,
-                    'message': 'Deployment successful',
+                    'message': f'Deployment successful! Project: {cf_project_name}',
+                    'project_name': cf_project_name,
                     'output': result['output']
                 }), 200
             else:
@@ -278,7 +607,8 @@ def health():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'service': 'Cloudflare Pages Deployment Server'
+        'service': 'M1 Instance - Sycord Deployment Server',
+        'instance': 'M1'
     }), 200
 
 
