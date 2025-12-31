@@ -181,8 +181,13 @@ def get_repository_document_by_id(repo_id, include_tokens=False):
 
 
 def get_repository_name(repo_doc):
-    """Extract repository name from a MongoDB document"""
+    """Extract repository name from a MongoDB document (prefers 'repo', falls back to 'name')"""
     return repo_doc.get('repo') or repo_doc.get('name')
+
+
+def get_repository_token(repo_doc):
+    """Return repository token, preferring 'token' and falling back to legacy 'github_token'"""
+    return repo_doc.get('token') or repo_doc.get('github_token')
 
 
 def get_github_repositories(github_token):
@@ -615,8 +620,7 @@ def deploy():
                 'message': 'Repository configuration not found'
             }), 404
         
-        # Support legacy field name `github_token` for backward compatibility
-        github_token = selected_repo.get('token') or selected_repo.get('github_token')
+        github_token = get_repository_token(selected_repo)
         
         if not github_token:
             return jsonify({
