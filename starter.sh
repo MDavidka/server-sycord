@@ -72,14 +72,45 @@ else
             print_error "Please install Homebrew first: https://brew.sh/"
             exit 1
         fi
-    elif [ -f /etc/debian_version ]; then
-        # Debian/Ubuntu
-        curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-        sudo apt-get install -y nodejs
-    elif [ -f /etc/redhat-release ]; then
-        # RHEL/CentOS
-        curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
-        sudo yum install -y nodejs
+    elif [ -f /etc/debian_version ] || [ -f /etc/redhat-release ]; then
+        # Linux (Debian/Ubuntu/RHEL/CentOS)
+        if command -v sudo &> /dev/null; then
+            if [ -f /etc/debian_version ]; then
+                curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+                sudo apt-get install -y nodejs
+            elif [ -f /etc/redhat-release ]; then
+                curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
+                sudo yum install -y nodejs
+            fi
+        else
+            print_warning "sudo not found. Attempting to install Node.js locally..."
+
+            # Detect architecture
+            ARCH=$(uname -m)
+            if [ "$ARCH" == "x86_64" ]; then
+                NODE_ARCH="x64"
+            elif [ "$ARCH" == "aarch64" ] || [ "$ARCH" == "arm64" ]; then
+                NODE_ARCH="arm64"
+            else
+                print_error "Unsupported architecture for local install: $ARCH"
+                exit 1
+            fi
+
+            # Install Node.js locally
+            NODE_VERSION="v18.19.0"
+            NODE_DIST="node-$NODE_VERSION-linux-$NODE_ARCH"
+            NODE_URL="https://nodejs.org/dist/$NODE_VERSION/$NODE_DIST.tar.xz"
+
+            mkdir -p .node
+            print_status "Downloading Node.js from $NODE_URL..."
+            if curl -fsSL "$NODE_URL" | tar -xJ -C .node --strip-components=1; then
+                export PATH="$PWD/.node/bin:$PATH"
+                print_success "Node.js installed locally in .node/"
+            else
+                print_error "Failed to download/install Node.js locally."
+                exit 1
+            fi
+        fi
     else
         print_error "Unsupported OS. Please install Node.js manually."
         exit 1
@@ -103,13 +134,22 @@ if command -v wrangler &> /dev/null; then
     print_success "Wrangler found: $(wrangler --version 2>&1 | head -1)"
 else
     print_status "Installing Wrangler CLI globally..."
-    npm install -g wrangler
-    
-    if command -v wrangler &> /dev/null; then
+    if npm install -g wrangler; then
         print_success "Wrangler installed: $(wrangler --version 2>&1 | head -1)"
     else
-        print_error "Failed to install Wrangler. Please install manually: npm install -g wrangler"
-        exit 1
+        print_warning "Global installation failed. Attempting to install with local prefix..."
+
+        # Configure local prefix
+        export NPM_CONFIG_PREFIX="$(pwd)/.npm-global"
+        export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"
+        mkdir -p "$NPM_CONFIG_PREFIX"
+
+        if npm install -g wrangler; then
+             print_success "Wrangler installed locally: $(wrangler --version 2>&1 | head -1)"
+        else
+             print_error "Failed to install Wrangler. Please install manually."
+             exit 1
+        fi
     fi
 fi
 
