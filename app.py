@@ -698,9 +698,31 @@ def health():
 
 
 if __name__ == '__main__':
-    # Check if required environment variables are set
+    # Check if required environment variables are set or still at defaults
+    config_errors = []
+
+    # Check for empty values
     if not CLOUDFLARE_API_TOKEN:
-        logger.warning("CLOUDFLARE_API_TOKEN not set. Deployment will fail.")
+        config_errors.append("CLOUDFLARE_API_TOKEN not set")
+
+    # Check for default values
+    defaults = {
+        "CLOUDFLARE_API_TOKEN": "your_cloudflare_api_token",
+        "CLOUDFLARE_ACCOUNT_ID": "your_cloudflare_account_id",
+        "MONGO_URI": "mongodb+srv://user:password@cluster.mongodb.net/?appName=Cluster"
+    }
+
+    for key, default_val in defaults.items():
+        val = os.getenv(key)
+        if val == default_val:
+            config_errors.append(f"{key} is still set to the default placeholder: '{default_val}'")
+
+    if config_errors:
+        logger.error("Configuration Error: The application is not properly configured.")
+        for error in config_errors:
+            logger.error(f"- {error}")
+        logger.error("Please edit the .env file with your actual credentials.")
+        exit(1)
     
     if not CLOUDFLARE_PROJECT_NAME:
         logger.warning("CLOUDFLARE_PROJECT_NAME not set. Deployment will fail.")

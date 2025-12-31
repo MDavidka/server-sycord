@@ -226,6 +226,20 @@ else
     print_success "Environment configuration found"
 fi
 
+# Check for default values in .env
+if grep -q "your_cloudflare_api_token" .env || \
+   grep -q "your_cloudflare_account_id" .env || \
+   grep -q "mongodb+srv://user:password@cluster.mongodb.net/?appName=Cluster" .env; then
+
+    print_error "Default configuration values detected in .env!"
+    echo "The application cannot run with the placeholder values."
+    echo "Please edit the .env file with your actual credentials."
+    echo "  - CLOUDFLARE_API_TOKEN"
+    echo "  - CLOUDFLARE_ACCOUNT_ID"
+    echo "  - MONGO_URI"
+    exit 1
+fi
+
 # Step 8: Start the server
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
