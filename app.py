@@ -181,12 +181,12 @@ def get_repository_document_by_id(repo_id, include_tokens=False):
 
 
 def get_repository_name(repo_doc):
-    """Extract repository name (prefer new 'repo' field, fall back to legacy 'name' field)"""
+    """Extract repository name (prefer new 'repo' field, fall back to legacy 'name' field); returns None if neither is set"""
     return repo_doc.get('repo') or repo_doc.get('name')
 
 
 def get_repository_token(repo_doc):
-    """Return repository token, preferring 'token' and falling back to legacy 'github_token'"""
+    """Return repository token, preferring 'token' and falling back to legacy 'github_token'; returns None if neither exists"""
     return repo_doc.get('token') or repo_doc.get('github_token')
 
 
