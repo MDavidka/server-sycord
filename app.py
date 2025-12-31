@@ -149,6 +149,39 @@ def get_repository_documents(include_tokens=False):
             client.close()
 
 
+def get_repository_document_by_id(repo_id, include_tokens=False):
+    """Retrieve a single repository document by its ID"""
+    try:
+        client = get_mongo_client()
+        db = client[MONGO_DB]
+        collection = db[MONGO_COLLECTION]
+        projection = {
+            'owner': 1,
+            'repo': 1,
+            'name': 1,
+            'description': 1,
+            'default_branch': 1,
+            'private': 1
+        }
+        if include_tokens:
+            projection.update({'token': 1, 'github_token': 1})
+        
+        try:
+            object_id = ObjectId(repo_id)
+        except Exception:
+            logger.warning(f"Invalid repository id: {repo_id}")
+            return None
+        
+        doc = collection.find_one({'_id': object_id}, projection)
+        return doc
+    except Exception as e:
+        logger.error(f"Error retrieving repository document from MongoDB: {e}")
+        raise
+    finally:
+        if 'client' in locals():
+            client.close()
+
+
 def get_repository_name(repo_doc):
     """Extract repository name from a MongoDB document"""
     return repo_doc.get('repo') or repo_doc.get('name')
@@ -576,11 +609,7 @@ def deploy():
             }), 400
         
         # Get repository details from MongoDB
-        repo_docs = get_repository_documents(include_tokens=True)
-        selected_repo = next(
-            (doc for doc in repo_docs if str(doc.get('_id')) == str(repo_id)),
-            None
-        )
+        selected_repo = get_repository_document_by_id(repo_id, include_tokens=True)
         
         if not selected_repo:
             return jsonify({
