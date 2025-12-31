@@ -7,6 +7,7 @@ import requests
 from flask import Flask, render_template, request, jsonify
 from pymongo import MongoClient
 from bson import ObjectId
+from bson.errors import InvalidId
 from dotenv import load_dotenv
 import logging
 from pathlib import Path
@@ -122,22 +123,28 @@ def get_github_token_from_mongo():
             client.close()
 
 
+def get_repository_projection(include_tokens=False):
+    """Build MongoDB projection for repository documents"""
+    projection = {
+        'owner': 1,
+        'repo': 1,
+        'name': 1,
+        'description': 1,
+        'default_branch': 1,
+        'private': 1
+    }
+    if include_tokens:
+        projection.update({'token': 1, 'github_token': 1})
+    return projection
+
+
 def get_repository_documents(include_tokens=False):
     """Retrieve repository documents (owner/repo/token) from MongoDB"""
     try:
         client = get_mongo_client()
         db = client[MONGO_DB]
         collection = db[MONGO_COLLECTION]
-        projection = {
-            'owner': 1,
-            'repo': 1,
-            'name': 1,
-            'description': 1,
-            'default_branch': 1,
-            'private': 1
-        }
-        if include_tokens:
-            projection.update({'token': 1, 'github_token': 1})
+        projection = get_repository_projection(include_tokens)
         docs = list(collection.find({}, projection))
         logger.info(f"Retrieved {len(docs)} repository documents from MongoDB")
         return docs
@@ -155,20 +162,11 @@ def get_repository_document_by_id(repo_id, include_tokens=False):
         client = get_mongo_client()
         db = client[MONGO_DB]
         collection = db[MONGO_COLLECTION]
-        projection = {
-            'owner': 1,
-            'repo': 1,
-            'name': 1,
-            'description': 1,
-            'default_branch': 1,
-            'private': 1
-        }
-        if include_tokens:
-            projection.update({'token': 1, 'github_token': 1})
+        projection = get_repository_projection(include_tokens)
         
         try:
             object_id = ObjectId(repo_id)
-        except Exception:
+        except (InvalidId, TypeError):
             logger.warning(f"Invalid repository id: {repo_id}")
             return None
         
