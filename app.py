@@ -122,6 +122,23 @@ def get_github_token_from_mongo():
             client.close()
 
 
+def get_repository_documents():
+    """Retrieve repository documents (owner/repo/token) from MongoDB"""
+    try:
+        client = get_mongo_client()
+        db = client[MONGO_DB]
+        collection = db[MONGO_COLLECTION]
+        docs = list(collection.find({}))
+        logger.info(f"Retrieved {len(docs)} repository documents from MongoDB")
+        return docs
+    except Exception as e:
+        logger.error(f"Error retrieving repository documents from MongoDB: {e}")
+        raise
+    finally:
+        if 'client' in locals():
+            client.close()
+
+
 def get_github_repositories(github_token):
     """Fetch repositories from GitHub using the token"""
     if not github_token:
@@ -484,30 +501,28 @@ def get_repos():
     try:
         logger.info("Fetching GitHub repositories")
         
-        # Get GitHub token from MongoDB
-        github_token = get_github_token_from_mongo()
+        # Get repository documents from MongoDB
+        repo_docs = get_repository_documents()
         
-        if not github_token:
+        if not repo_docs:
             return jsonify({
-                'success': False,
-                'message': 'GitHub token not found in database',
+                'success': True,
+                'message': 'No repositories found in database',
                 'repositories': []
-            }), 404
-        
-        # Fetch repositories from GitHub
-        repos = get_github_repositories(github_token)
+            }), 200
         
         # Format repositories for frontend
         formatted_repos = [
             {
-                'id': str(repo.get('id')),
-                'name': repo.get('name', 'Unknown'),
-                'full_name': repo.get('full_name', ''),
-                'description': repo.get('description', ''),
-                'default_branch': repo.get('default_branch', 'main'),
-                'private': repo.get('private', False)
+                'id': str(repo_doc.get('_id')),
+                'name': repo_doc.get('repo') or repo_doc.get('name', 'Unknown'),
+                'full_name': f"{repo_doc.get('owner', '')}/{repo_doc.get('repo') or repo_doc.get('name', '')}".strip('/'),
+                'description': repo_doc.get('description', ''),
+                'default_branch': repo_doc.get('default_branch', 'main'),
+                'private': repo_doc.get('private', False)
             }
-            for repo in repos
+            for repo_doc in repo_docs
+            if repo_doc.get('owner') and (repo_doc.get('repo') or repo_doc.get('name'))
         ]
         
         return jsonify({
@@ -541,34 +556,38 @@ def deploy():
                 'message': 'Repository ID is required'
             }), 400
         
-        # Get GitHub token from MongoDB
-        github_token = get_github_token_from_mongo()
-        
-        if not github_token:
-            return jsonify({
-                'success': False,
-                'message': 'GitHub token not found in database'
-            }), 404
-        
-        # Get repository details from GitHub
-        repos = get_github_repositories(github_token)
-        
-        # Find the selected repository
-        selected_repo = None
-        for repo in repos:
-            if str(repo.get('id')) == str(repo_id):
-                selected_repo = repo
-                break
+        # Get repository details from MongoDB
+        repo_docs = get_repository_documents()
+        selected_repo = next(
+            (doc for doc in repo_docs if str(doc.get('_id')) == str(repo_id)),
+            None
+        )
         
         if not selected_repo:
             return jsonify({
                 'success': False,
-                'message': 'Repository not found'
+                'message': 'Repository configuration not found'
             }), 404
         
-        repo_full_name = selected_repo.get('full_name')
-        repo_name = selected_repo.get('name')
+        github_token = selected_repo.get('token') or selected_repo.get('github_token')
+        
+        if not github_token:
+            return jsonify({
+                'success': False,
+                'message': 'GitHub token not found for repository'
+            }), 404
+        
+        owner = selected_repo.get('owner')
+        repo_name = selected_repo.get('repo') or selected_repo.get('name')
+        
+        if not owner or not repo_name:
+            return jsonify({
+                'success': False,
+                'message': 'Repository configuration missing owner or name'
+            }), 400
+        
         default_branch = selected_repo.get('default_branch', 'main')
+        repo_full_name = f"{owner}/{repo_name}"
         
         # Generate Cloudflare project name from repo name (sanitized)
         cf_project_name = sanitize_project_name(repo_name)
