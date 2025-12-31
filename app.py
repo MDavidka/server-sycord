@@ -36,8 +36,8 @@ def sanitize_filename(filename):
     # Normalize path separators to forward slashes for consistent checking
     normalized = filename.replace('\\', '/')
     
-    # Reject absolute paths (both Unix and Windows styles)
-    if os.path.isabs(filename) or filename.startswith('/') or (len(filename) > 1 and filename[1] == ':'):
+    # Reject absolute paths
+    if os.path.isabs(filename) or filename.startswith('/'):
         logger.warning(f"Rejected absolute path: {filename}")
         return os.path.basename(normalized)
     
@@ -52,7 +52,8 @@ def sanitize_filename(filename):
     safe_filename = os.path.normpath(normalized)
     
     # Final check: ensure no '..' components remain after normalization
-    if '..' in safe_filename.split(os.sep):
+    # Use '/' for splitting since we normalized to forward slashes
+    if '..' in safe_filename.replace(os.sep, '/').split('/'):
         logger.warning(f"Rejected path with '..' after normalization: {filename}")
         return os.path.basename(normalized)
     
@@ -129,11 +130,10 @@ def save_files_to_temp_directory(files):
                     f.write(content)
                 logger.info(f"Saved file: {filename}")
             except (UnicodeEncodeError, UnicodeDecodeError) as e:
-                logger.error(f"Encoding error for file {filename}: {e}")
-                # Try with error handling for invalid characters
-                with open(file_path, 'w', encoding='utf-8', errors='replace') as f:
-                    f.write(content)
-                logger.info(f"Saved file with encoding fallback: {filename}")
+                # Log the encoding error and skip the file to avoid corruption
+                logger.error(f"UTF-8 encoding error for file {filename}: {e}")
+                logger.warning(f"Skipping file {filename} due to encoding issues")
+                continue
             except Exception as e:
                 logger.error(f"Failed to write file {filename}: {e}")
                 continue
