@@ -359,9 +359,20 @@ def deploy_to_cloudflare_pages(directory_path, project_name):
         if result.returncode == 0:
             logger.info("Deployment successful")
             logger.info(result.stdout)
+
+            # Extract URL from stdout
+            # Wrangler output typically contains: "Take a peek over at https://<project>.pages.dev"
+            # or just the URL at the end.
+            url = None
+            # Search for https://*.pages.dev
+            url_match = re.search(r'https://[a-zA-Z0-9-]+\.pages\.dev', result.stdout)
+            if url_match:
+                url = url_match.group(0)
+
             return {
                 'success': True,
                 'output': result.stdout,
+                'url': url,
                 'error': None
             }
         else:
@@ -665,6 +676,7 @@ def deploy():
                     'success': True,
                     'message': f'Deployment successful! Project: {cf_project_name}',
                     'project_name': cf_project_name,
+                    'url': result.get('url'),
                     'output': result['output']
                 }), 200
             else:

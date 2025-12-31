@@ -80,35 +80,6 @@
             font-weight: 400;
         }
 
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: #22c55e;
-            border-radius: 50%;
-            animation: pulse-dot 2s ease-in-out infinite;
-        }
-
-        .status-text {
-            font-size: 13px;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.8);
-        }
-
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
         /* Data Transfer Animation Card */
         .data-transfer-card {
             background: rgba(255, 255, 255, 0.03);
@@ -461,8 +432,14 @@
         .api-header {
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
             margin-bottom: 16px;
+        }
+
+        .api-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .api-header svg {
@@ -475,6 +452,34 @@
             font-size: 14px;
             font-weight: 600;
             color: #ffffff;
+        }
+
+        .info-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: rgba(255, 255, 255, 0.5);
+            transition: color 0.2s;
+            padding: 4px;
+        }
+
+        .info-button:hover {
+            color: #ffffff;
+        }
+
+        .api-docs {
+            font-size: 13px;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.7);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .api-docs.show {
+            display: block;
         }
 
         .endpoint {
@@ -592,10 +597,6 @@
                     <span>Sycord Deployment Server</span>
                 </div>
             </div>
-            <div class="status-indicator">
-                <div class="status-dot"></div>
-                <span class="status-text">Active</span>
-            </div>
         </header>
 
         <!-- Data Transfer Animation -->
@@ -629,8 +630,9 @@
                 </div>
                 <div class="server-node">
                     <div class="server-icon">
+                        <!-- Correct Cloudflare Icon -->
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M16.5 4.5c0 1.05-.672 1.942-1.606 2.28A3.5 3.5 0 0 1 17 10.5V18a3 3 0 1 1-6 0v-1.5a1.5 1.5 0 1 0-3 0V18a3 3 0 1 1-6 0v-7.5a3.5 3.5 0 0 1 2.106-3.72A2.5 2.5 0 1 1 7.5 4.5a2.5 2.5 0 0 1 2.5 2.5V9h4V7a2.5 2.5 0 0 1 2.5-2.5z"/>
+                            <path d="M11.666 11.233a1.458 1.458 0 0 1-.225 1.55c-.2.233-.525.392-.817.4-1.291.033-2.616-.017-3.908-.008.267.4.408.842.533 1.292.05.183.083.375.142.55.333 1.05.9 1.95 1.775 2.65a5.55 5.55 0 0 0 3.25.991c.083 0 .166-.008.258-.008l.175.008h6.583a4.01 4.01 0 0 0 1.992-7.508 4.6 4.6 0 0 0-4.042-2.733 4.5 4.5 0 0 0-3.967 2.216 4.8 4.8 0 0 0-.6 1.042c-.225-.267-.5-.467-.825-.492-.108-.008-.216-.025-.325-.033zM9.433 9.425a5.3 5.3 0 0 1 1.084-.367c.183-.042.366-.067.55-.075.05 0 .1-.008.15-.008.066 0 .125 0 .191.008l.009-.175c.041-1.25.591-2.4 1.541-3.233a4.46 4.46 0 0 1 2.917-1.075c1.191 0 2.308.45 3.166 1.25.267.25.509.525.725.817.025.033.05.066.075.1l.034.192c.008.05.016.1.025.141.658-.333 1.391-.516 2.133-.516h.058l.183.008c.55.033 1.084.141 1.592.316l.125.042.175-.125a6.04 6.04 0 0 0-1.267-2.608A5.92 5.92 0 0 0 18.275 1.9a5.96 5.96 0 0 0-3.325-1.008 5.86 5.86 0 0 0-5.183 3.325 5.8 5.8 0 0 0-.275 4.091l.066.234-.125.183a6.1 6.1 0 0 0-1.391 3.517l-.009.116.117-.05c.425-.191.866-.333 1.316-.416l.109-.017-.142-.45zM8.217 12.167a2.53 2.53 0 0 1 .841-1.834l.117-.1-.133-.083a2.95 2.95 0 0 0-1.575-.45h-.225c-1.633 0-2.967 1.333-2.967 2.967 0 1.291.85 2.4 2.025 2.808l.15.05.025-.158c.2-.925.875-1.667 1.742-2.008z"/>
                         </svg>
                     </div>
                     <span class="server-label">Cloudflare</span>
@@ -660,11 +662,26 @@
         <!-- API Endpoints -->
         <section class="api-section">
             <div class="api-header">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 4h16v16H4zM9 9h6M9 13h6M9 17h4"/>
-                </svg>
-                <h3>API Endpoints</h3>
+                <div class="api-header-left">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4h16v16H4zM9 9h6M9 13h6M9 17h4"/>
+                    </svg>
+                    <h3>API Endpoints</h3>
+                </div>
+                <button class="info-button" onclick="toggleApiDocs()" title="Show API Documentation">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-11v6h2v-6h-2zm0-4v2h2V7h-2z"/>
+                    </svg>
+                </button>
             </div>
+
+            <div class="api-docs" id="apiDocs">
+                <p><strong>How the API works:</strong></p>
+                <p>1. <code>/api/repos</code> (GET): Fetches the list of available repositories from the database.</p>
+                <p>2. <code>/api/deploy</code> (POST): Trigger a deployment. Accepts a JSON body with <code>{ "repo_id": "..." }</code>. The server downloads the code from GitHub and deploys it to Cloudflare Pages.</p>
+                <p>3. <code>/api/health</code> (GET): Checks if the deployment server is running.</p>
+            </div>
+
             <div class="endpoint">
                 <span class="endpoint-method post">POST</span>
                 <span class="endpoint-path">/api/deploy</span>
@@ -819,6 +836,16 @@
                 if (response.ok && data.success) {
                     message.className = 'message success show';
                     message.textContent = data.message || 'Deployment successful!';
+                    if (data.url) {
+                         const link = document.createElement('a');
+                         link.href = data.url;
+                         link.target = '_blank';
+                         link.textContent = ' Visit Site';
+                         link.style.color = 'inherit';
+                         link.style.textDecoration = 'underline';
+                         link.style.marginLeft = '5px';
+                         message.appendChild(link);
+                    }
                 } else {
                     message.className = 'message error show';
                     message.textContent = data.message || 'Deployment failed';
@@ -838,6 +865,11 @@
                     Deploy to Cloudflare
                 `;
             }
+        }
+
+        function toggleApiDocs() {
+            const docs = document.getElementById('apiDocs');
+            docs.classList.toggle('show');
         }
 
         // Check server health on page load
