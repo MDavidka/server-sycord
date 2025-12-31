@@ -52,8 +52,9 @@ def sanitize_filename(filename):
     safe_filename = os.path.normpath(normalized)
     
     # Final check: ensure no '..' components remain after normalization
-    # Use '/' for splitting since we normalized to forward slashes
-    if '..' in safe_filename.replace(os.sep, '/').split('/'):
+    # Split by os.sep since normpath converts to os-specific separators
+    path_parts = safe_filename.split(os.sep)
+    if '..' in path_parts:
         logger.warning(f"Rejected path with '..' after normalization: {filename}")
         return os.path.basename(normalized)
     
@@ -129,8 +130,8 @@ def save_files_to_temp_directory(files):
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(content)
                 logger.info(f"Saved file: {filename}")
-            except (UnicodeEncodeError, UnicodeDecodeError) as e:
-                # Log the encoding error and skip the file to avoid corruption
+            except UnicodeEncodeError as e:
+                # Content from MongoDB contains characters that cannot be encoded to UTF-8
                 logger.error(f"UTF-8 encoding error for file {filename}: {e}")
                 logger.warning(f"Skipping file {filename} due to encoding issues")
                 continue
