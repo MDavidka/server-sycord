@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import tempfile
 import shutil
@@ -30,7 +31,21 @@ CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')
 CLOUDFLARE_PROJECT_NAME = os.getenv('CLOUDFLARE_PROJECT_NAME')
 
 # Project ID for GitHub token lookup
-PROJECT_ID = os.getenv('PROJECT_ID', '6954ed250d9fa1238cb13e3c')
+PROJECT_ID = os.getenv('PROJECT_ID', '')
+
+# API timeout configuration (in seconds)
+API_TIMEOUT = 30
+DOWNLOAD_TIMEOUT = 120
+
+
+def sanitize_project_name(name):
+    """Sanitize a repository name for use as a Cloudflare project name"""
+    if not name:
+        return 'unnamed-project'
+    # Replace any non-alphanumeric characters (except hyphens) with hyphens
+    sanitized = re.sub(r'[^a-zA-Z0-9-]', '-', name.lower())
+    # Cloudflare project names have a max length of 63 characters
+    return sanitized[:63]
 
 
 def sanitize_filename(filename):
@@ -123,7 +138,7 @@ def get_github_repositories(github_token):
             'https://api.github.com/user/repos',
             headers=headers,
             params={'per_page': 100, 'sort': 'updated'},
-            timeout=30
+            timeout=API_TIMEOUT
         )
         
         if response.status_code == 200:
@@ -155,7 +170,7 @@ def download_github_repo(github_token, repo_full_name, branch='main'):
         
         for try_branch in branches_to_try:
             url = f'https://api.github.com/repos/{repo_full_name}/zipball/{try_branch}'
-            response = requests.get(url, headers=headers, stream=True, timeout=120)
+            response = requests.get(url, headers=headers, stream=True, timeout=DOWNLOAD_TIMEOUT)
             
             if response.status_code == 200:
                 # Save the zip file
@@ -219,7 +234,7 @@ def create_cloudflare_project(project_name):
             'production_branch': 'main'
         }
         
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response = requests.post(url, headers=headers, json=payload, timeout=API_TIMEOUT)
         
         if response.status_code in [200, 201]:
             result = response.json()
@@ -556,8 +571,7 @@ def deploy():
         default_branch = selected_repo.get('default_branch', 'main')
         
         # Generate Cloudflare project name from repo name (sanitized)
-        import re
-        cf_project_name = re.sub(r'[^a-zA-Z0-9-]', '-', repo_name.lower())[:63]
+        cf_project_name = sanitize_project_name(repo_name)
         
         # Create Cloudflare project if it doesn't exist
         create_cloudflare_project(cf_project_name)

@@ -6,7 +6,7 @@
 # with automatic Wrangler installation
 # ============================================
 
-set -e
+set -euo pipefail
 
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║          Sycord M1 Instance - Deployment Server            ║"
@@ -126,8 +126,15 @@ fi
 print_status "Installing Python dependencies..."
 source venv/bin/activate
 
-pip install --upgrade pip > /dev/null 2>&1
-pip install -r requirements.txt > /dev/null 2>&1
+if ! pip install --upgrade pip; then
+    print_error "Failed to upgrade pip"
+    exit 1
+fi
+
+if ! pip install -r requirements.txt; then
+    print_error "Failed to install Python dependencies"
+    exit 1
+fi
 
 print_success "Python dependencies installed"
 
