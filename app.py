@@ -33,19 +33,28 @@ def sanitize_filename(filename):
     if not filename:
         return 'index.html'
     
-    # Remove any path components that could escape the directory
-    # Convert to Path object and get just the name parts
-    safe_filename = os.path.normpath(filename)
+    # Normalize path separators to forward slashes for consistent checking
+    normalized = filename.replace('\\', '/')
     
-    # Reject absolute paths
-    if os.path.isabs(safe_filename):
+    # Reject absolute paths (both Unix and Windows styles)
+    if os.path.isabs(filename) or filename.startswith('/') or (len(filename) > 1 and filename[1] == ':'):
         logger.warning(f"Rejected absolute path: {filename}")
-        return os.path.basename(filename)
+        return os.path.basename(normalized)
     
     # Reject paths that try to go up directories
-    if safe_filename.startswith('..') or '/..' in safe_filename or '\\..\\' in safe_filename:
+    if (normalized.startswith('..') or 
+        '/..' in normalized or 
+        normalized.endswith('/..')):
         logger.warning(f"Rejected path traversal attempt: {filename}")
-        return os.path.basename(filename)
+        return os.path.basename(normalized)
+    
+    # Use normpath after validation to clean up the path
+    safe_filename = os.path.normpath(normalized)
+    
+    # Final check: ensure no '..' components remain after normalization
+    if '..' in safe_filename.split(os.sep):
+        logger.warning(f"Rejected path with '..' after normalization: {filename}")
+        return os.path.basename(normalized)
     
     return safe_filename
 
@@ -107,13 +116,27 @@ def save_files_to_temp_directory(files):
             # Create subdirectories if needed
             dir_path = os.path.dirname(file_path)
             if dir_path and dir_path != temp_dir:
+                # Verify directory path is still within temp_dir
+                real_dir_path = os.path.realpath(dir_path)
+                if not real_dir_path.startswith(real_temp_dir):
+                    logger.warning(f"Rejected directory path outside temp directory: {raw_filename}")
+                    continue
                 os.makedirs(dir_path, exist_ok=True)
             
-            # Write content to file
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            
-            logger.info(f"Saved file: {filename}")
+            # Write content to file with error handling
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                logger.info(f"Saved file: {filename}")
+            except (UnicodeEncodeError, UnicodeDecodeError) as e:
+                logger.error(f"Encoding error for file {filename}: {e}")
+                # Try with error handling for invalid characters
+                with open(file_path, 'w', encoding='utf-8', errors='replace') as f:
+                    f.write(content)
+                logger.info(f"Saved file with encoding fallback: {filename}")
+            except Exception as e:
+                logger.error(f"Failed to write file {filename}: {e}")
+                continue
         
         return temp_dir
     except Exception as e:
