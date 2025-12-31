@@ -269,9 +269,11 @@
 
                 if (response.ok && data.success) {
                     message.className = 'message success show';
+                    // Using textContent instead of innerHTML to prevent XSS
                     message.textContent = '✅ ' + data.message;
                 } else {
                     message.className = 'message error show';
+                    // Using textContent instead of innerHTML to prevent XSS
                     message.textContent = '❌ ' + (data.message || 'Deployment failed');
                     if (data.error) {
                         message.textContent += '\n' + data.error;
@@ -279,6 +281,7 @@
                 }
             } catch (error) {
                 message.className = 'message error show';
+                // Using textContent instead of innerHTML to prevent XSS
                 message.textContent = '❌ Error: ' + error.message;
             } finally {
                 button.disabled = false;

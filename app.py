@@ -28,6 +28,28 @@ CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')
 CLOUDFLARE_PROJECT_NAME = os.getenv('CLOUDFLARE_PROJECT_NAME')
 
 
+def sanitize_filename(filename):
+    """Sanitize filename to prevent path traversal attacks"""
+    if not filename:
+        return 'index.html'
+    
+    # Remove any path components that could escape the directory
+    # Convert to Path object and get just the name parts
+    safe_filename = os.path.normpath(filename)
+    
+    # Reject absolute paths
+    if os.path.isabs(safe_filename):
+        logger.warning(f"Rejected absolute path: {filename}")
+        return os.path.basename(filename)
+    
+    # Reject paths that try to go up directories
+    if safe_filename.startswith('..') or '/..' in safe_filename or '\\..\\' in safe_filename:
+        logger.warning(f"Rejected path traversal attempt: {filename}")
+        return os.path.basename(filename)
+    
+    return safe_filename
+
+
 def get_mongo_client():
     """Create and return MongoDB client"""
     try:
@@ -67,14 +89,24 @@ def save_files_to_temp_directory(files):
     try:
         for file_doc in files:
             # Assume files have 'filename' and 'content' fields
-            filename = file_doc.get('filename', 'index.html')
+            raw_filename = file_doc.get('filename', 'index.html')
             content = file_doc.get('content', '')
+            
+            # Sanitize filename to prevent path traversal
+            filename = sanitize_filename(raw_filename)
             
             file_path = os.path.join(temp_dir, filename)
             
+            # Ensure the resolved path is still within temp_dir
+            real_path = os.path.realpath(file_path)
+            real_temp_dir = os.path.realpath(temp_dir)
+            if not real_path.startswith(real_temp_dir):
+                logger.warning(f"Rejected file path outside temp directory: {raw_filename}")
+                continue
+            
             # Create subdirectories if needed
             dir_path = os.path.dirname(file_path)
-            if dir_path:
+            if dir_path and dir_path != temp_dir:
                 os.makedirs(dir_path, exist_ok=True)
             
             # Write content to file
