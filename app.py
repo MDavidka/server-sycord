@@ -122,13 +122,23 @@ def get_github_token_from_mongo():
             client.close()
 
 
-def get_repository_documents():
+def get_repository_documents(include_tokens=False):
     """Retrieve repository documents (owner/repo/token) from MongoDB"""
     try:
         client = get_mongo_client()
         db = client[MONGO_DB]
         collection = db[MONGO_COLLECTION]
-        docs = list(collection.find({}))
+        projection = {
+            'owner': 1,
+            'repo': 1,
+            'name': 1,
+            'description': 1,
+            'default_branch': 1,
+            'private': 1
+        }
+        if include_tokens:
+            projection.update({'token': 1, 'github_token': 1})
+        docs = list(collection.find({}, projection))
         logger.info(f"Retrieved {len(docs)} repository documents from MongoDB")
         return docs
     except Exception as e:
@@ -137,6 +147,11 @@ def get_repository_documents():
     finally:
         if 'client' in locals():
             client.close()
+
+
+def get_repository_name(repo_doc):
+    """Extract repository name from a MongoDB document"""
+    return repo_doc.get('repo') or repo_doc.get('name')
 
 
 def get_github_repositories(github_token):
@@ -515,14 +530,14 @@ def get_repos():
         formatted_repos = [
             {
                 'id': str(repo_doc.get('_id')),
-                'name': repo_doc.get('repo') or repo_doc.get('name', 'Unknown'),
-                'full_name': f"{repo_doc.get('owner', '')}/{repo_doc.get('repo') or repo_doc.get('name', '')}".strip('/'),
+                'name': get_repository_name(repo_doc) or 'Unknown',
+                'full_name': f"{repo_doc.get('owner', '')}/{get_repository_name(repo_doc) or ''}".strip('/'),
                 'description': repo_doc.get('description', ''),
                 'default_branch': repo_doc.get('default_branch', 'main'),
                 'private': repo_doc.get('private', False)
             }
             for repo_doc in repo_docs
-            if repo_doc.get('owner') and (repo_doc.get('repo') or repo_doc.get('name'))
+            if repo_doc.get('owner') and get_repository_name(repo_doc)
         ]
         
         return jsonify({
@@ -557,7 +572,7 @@ def deploy():
             }), 400
         
         # Get repository details from MongoDB
-        repo_docs = get_repository_documents()
+        repo_docs = get_repository_documents(include_tokens=True)
         selected_repo = next(
             (doc for doc in repo_docs if str(doc.get('_id')) == str(repo_id)),
             None
@@ -569,6 +584,7 @@ def deploy():
                 'message': 'Repository configuration not found'
             }), 404
         
+        # Support legacy field name `github_token` for backward compatibility
         github_token = selected_repo.get('token') or selected_repo.get('github_token')
         
         if not github_token:
@@ -578,7 +594,7 @@ def deploy():
             }), 404
         
         owner = selected_repo.get('owner')
-        repo_name = selected_repo.get('repo') or selected_repo.get('name')
+        repo_name = get_repository_name(selected_repo)
         
         if not owner or not repo_name:
             return jsonify({
