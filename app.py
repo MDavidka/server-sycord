@@ -73,7 +73,9 @@ def save_files_to_temp_directory(files):
             file_path = os.path.join(temp_dir, filename)
             
             # Create subdirectories if needed
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            dir_path = os.path.dirname(file_path)
+            if dir_path:
+                os.makedirs(dir_path, exist_ok=True)
             
             # Write content to file
             with open(file_path, 'w', encoding='utf-8') as f:
