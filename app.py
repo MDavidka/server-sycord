@@ -527,18 +527,22 @@ def get_repos():
             }), 200
         
         # Format repositories for frontend
-        formatted_repos = [
-            {
+        formatted_repos = []
+        for repo_doc in repo_docs:
+            repo_name = get_repository_name(repo_doc)
+            owner = repo_doc.get('owner')
+            
+            if not owner or not repo_name:
+                continue
+            
+            formatted_repos.append({
                 'id': str(repo_doc.get('_id')),
-                'name': get_repository_name(repo_doc) or 'Unknown',
-                'full_name': f"{repo_doc.get('owner', '')}/{get_repository_name(repo_doc) or ''}".strip('/'),
+                'name': repo_name,
+                'full_name': f"{owner}/{repo_name}",
                 'description': repo_doc.get('description', ''),
                 'default_branch': repo_doc.get('default_branch', 'main'),
                 'private': repo_doc.get('private', False)
-            }
-            for repo_doc in repo_docs
-            if repo_doc.get('owner') and get_repository_name(repo_doc)
-        ]
+            })
         
         return jsonify({
             'success': True,

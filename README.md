@@ -90,6 +90,8 @@ GitHub repositories should be stored in MongoDB with the following structure:
 }
 ```
 
+Use the `token` field for new documents. A legacy `github_token` field is also accepted for backward compatibility, but `token` takes precedence when both are present.
+
 ## Usage
 
 ### Running the Server
