@@ -205,9 +205,11 @@ def get_repo_by_user_and_id(username, repo_id):
             logger.warning(f"User {username} not found or has no git connections")
             return None
         
-        # Find the specific repo by repo_id
+        # Find the specific repo by repo_id (normalize to 5-digit zero-padded string)
+        normalized_repo_id = str(repo_id).zfill(5)
         for repo in user_doc['git_connection']:
-            if str(repo.get('repo_id')) == str(repo_id):
+            stored_repo_id = str(repo.get('repo_id', '')).zfill(5)
+            if stored_repo_id == normalized_repo_id:
                 logger.info(f"Found repository {repo_id} for user {username}")
                 return repo
         
@@ -297,12 +299,12 @@ def parse_git_url(git_url):
     if not git_url:
         return None, None
     
-    # HTTPS format
+    # HTTPS format - strip .git suffix if present
     https_match = re.match(r'https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?$', git_url)
     if https_match:
         return https_match.group(1), https_match.group(2)
     
-    # SSH format
+    # SSH format - strip .git suffix if present
     ssh_match = re.match(r'git@github\.com:([^/]+)/([^/]+?)(?:\.git)?$', git_url)
     if ssh_match:
         return ssh_match.group(1), ssh_match.group(2)
@@ -849,7 +851,8 @@ def deploy_by_user_repo(username, repo_id):
         logger.info(f"Received deployment request for user={username}, repo_id={repo_id}")
         
         # Validate repo_id format (should be 5 digits)
-        if not repo_id or not re.match(r'^\d{5}$', str(repo_id)):
+        # repo_id comes from URL path, so it's already a string
+        if not repo_id or not isinstance(repo_id, str) or not re.match(r'^\d{5}$', repo_id):
             return jsonify({
                 'success': False,
                 'message': 'Invalid repo_id format. Expected 5-digit identifier.'
