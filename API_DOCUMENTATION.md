@@ -9,6 +9,7 @@ This document provides detailed information about the deployment API endpoints, 
    - [Deploy by Username and Repo ID](#deploy-by-username-and-repo-id)
    - [List All Repositories](#list-all-repositories)
    - [List User Repositories](#list-user-repositories)
+   - [Get Deployment Domain by Repo ID](#get-deployment-domain-by-repo-id)
    - [Health Check](#health-check)
 3. [Error Handling](#error-handling)
 4. [Deployment Flow](#deployment-flow)
@@ -161,6 +162,53 @@ The API performs the following actions:
 | 400 | Could not parse git_url: {url} | Invalid GitHub URL format |
 | 500 | Failed to download repository from GitHub | GitHub API error or invalid token |
 | 500 | Deployment failed | Cloudflare/Wrangler deployment error |
+
+---
+
+### Get Deployment Domain by Repo ID
+
+**Endpoint:** `GET /api/deploy/{repo_id}/domain`
+
+Retrieve the Cloudflare Pages domain for a deployed repository using its `repo_id`.
+
+#### Request
+
+```bash
+curl "http://localhost:5000/api/deploy/1126661988/domain"
+```
+
+#### Response (Success)
+
+```json
+{
+  "success": true,
+  "repo_id": "1126661988",
+  "project_name": "tesf",
+  "domain": "https://tesf.pages.dev",
+  "username": "MDavidka",
+  "git_url": "https://github.com/MDavidka/tesf",
+  "owner": "MDavidka",
+  "repo_name": "tesf"
+}
+```
+
+#### Response (Error)
+
+```json
+{
+  "success": false,
+  "message": "Invalid repo_id format. Expected numeric identifier."
+}
+```
+
+#### Error Codes
+
+| HTTP Status | Message | Cause |
+|-------------|---------|-------|
+| 400 | Invalid repo_id format. Expected numeric identifier. | `repo_id` is not numeric |
+| 404 | Repository {repo_id} not found | Repo_id not present in git_connection |
+| 404 | Repository name not found for repository | Missing `repo_name` and unparsable `git_url` |
+| 500 | Failed to retrieve deployment domain | Unexpected server error |
 
 ---
 

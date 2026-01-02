@@ -1009,6 +1009,61 @@ def deploy_by_repo(repo_id):
         }), 500
 
 
+@app.route('/api/deploy/<repo_id>/domain', methods=['GET'])
+def get_deployment_domain(repo_id):
+    """
+    API endpoint to retrieve the deployment domain for a repository by repo_id.
+    """
+    try:
+        logger.info(f"Fetching deployment domain for repo_id={repo_id}")
+
+        if not repo_id or not isinstance(repo_id, str) or not re.match(r'^\\d+$', repo_id):
+            return jsonify({
+                'success': False,
+                'message': 'Invalid repo_id format. Expected numeric identifier.'
+            }), 400
+
+        repo_doc = get_repo_by_id(repo_id)
+
+        if not repo_doc:
+            return jsonify({
+                'success': False,
+                'message': f'Repository {repo_id} not found'
+            }), 404
+
+        git_url = repo_doc.get('git_url')
+        repo_name_from_db = repo_doc.get('repo_name')
+        owner, repo_name_from_url = parse_git_url(git_url)
+        repo_name = repo_name_from_db or repo_name_from_url
+
+        if not repo_name:
+            return jsonify({
+                'success': False,
+                'message': 'Repository name not found for repository'
+            }), 404
+
+        project_name = sanitize_project_name(repo_name)
+        domain = f"https://{project_name}.pages.dev"
+
+        return jsonify({
+            'success': True,
+            'repo_id': str(repo_id),
+            'username': repo_doc.get('username'),
+            'owner': owner,
+            'repo_name': repo_name,
+            'project_name': project_name,
+            'domain': domain,
+            'git_url': git_url
+        }), 200
+    except Exception as e:
+        logger.error(f"Error retrieving deployment domain for repo {repo_id}: {e}")
+        return jsonify({
+            'success': False,
+            'message': 'Failed to retrieve deployment domain',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/deploy', methods=['POST'])
 def deploy():
     """API endpoint to trigger deployment from GitHub repository (legacy support)"""

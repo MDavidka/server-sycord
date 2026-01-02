@@ -268,6 +268,25 @@ curl -X POST http://localhost:5000/api/deploy/12345
 }
 ```
 
+### GET /api/deploy/{repo_id}/domain
+
+Fetch the Cloudflare Pages domain for a deployed repository.
+
+**Request:**
+```bash
+curl http://localhost:5000/api/deploy/12345/domain
+```
+
+**Response (Success):**
+```json
+{
+  "success": true,
+  "repo_id": "12345",
+  "project_name": "my-repo",
+  "domain": "https://my-repo.pages.dev"
+}
+```
+
 ### POST /api/deploy (Legacy)
 
 Legacy endpoint for backward compatibility. Trigger a deployment using MongoDB ObjectId.
