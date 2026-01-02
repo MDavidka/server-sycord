@@ -193,31 +193,29 @@ curl http://localhost:5000/api/repos/user1
 }
 ```
 
-### GET/POST /api/deploy/{username}/{repo_id}
+### GET/POST /api/deploy/{repo_id}
 
 Triggers a deployment from a GitHub repository to Cloudflare Pages.
 
 **URL Parameters:**
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `username` | string | The username of the repository owner |
 | `repo_id` | string | 5-digit repository identifier |
 
 **Request:**
 ```bash
 # Using GET
-curl http://localhost:5000/api/deploy/user1/12345
+curl http://localhost:5000/api/deploy/12345
 
 # Using POST
-curl -X POST http://localhost:5000/api/deploy/user1/12345
+curl -X POST http://localhost:5000/api/deploy/12345
 ```
 
 **What the API expects:**
-- Valid `username` that exists in the `users` collection
-- Valid `repo_id` (5-digit identifier) that matches a repository in the user's `git_connection` array
+- Valid `repo_id` (5-digit identifier) that matches a repository in a user's `git_connection` array
 
 **What the API provides:**
-1. Validates the username and repo_id
+1. Validates the repo_id
 2. Retrieves the repository configuration (`git_url`, `git_token`) from MongoDB
 3. Downloads the repository from GitHub using the `git_token` for authentication
 4. Creates a Cloudflare Pages project (if it doesn't exist)

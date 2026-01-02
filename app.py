@@ -241,6 +241,40 @@ def get_repo_by_user_and_id(username, repo_id):
             client.close()
 
 
+def get_repo_by_id(repo_id):
+    """
+    Retrieve a specific repository by repo_id across all users.
+    Returns the repo document with git_url, git_token, and the associated username.
+    """
+    try:
+        users = get_all_users_with_repos()
+        repo_id_str = str(repo_id)
+
+        for user in users:
+            username = user.get('username')
+            git_connection = user.get('git_connection', {})
+
+            if isinstance(git_connection, dict):
+                if repo_id_str in git_connection:
+                    repo = dict(git_connection[repo_id_str] or {})
+                    repo.setdefault('username', username)
+                    repo.setdefault('repo_id', repo_id_str)
+                    return repo
+            else:
+                for repo in git_connection:
+                    if str(repo.get('repo_id', '')) == repo_id_str:
+                        repo_with_user = dict(repo)
+                        repo_with_user.setdefault('username', username)
+                        repo_with_user.setdefault('repo_id', repo_id_str)
+                        return repo_with_user
+
+        logger.warning(f"Repository {repo_id} not found across users")
+        return None
+    except Exception as e:
+        logger.error(f"Error retrieving repository {repo_id}: {e}")
+        raise
+
+
 def get_repository_documents(include_tokens=False):
     """
     Retrieve all repository documents from all users.
@@ -840,15 +874,14 @@ def get_user_repos_endpoint(username):
         }), 500
 
 
-@app.route('/api/deploy/<username>/<repo_id>', methods=['GET', 'POST'])
-def deploy_by_user_repo(username, repo_id):
+@app.route('/api/deploy/<repo_id>', methods=['GET', 'POST'])
+def deploy_by_repo(repo_id):
     """
-    API endpoint to trigger deployment for a specific user's repository.
+    API endpoint to trigger deployment for a specific repository by repo_id.
     
-    URL: GET/POST /api/deploy/<username>/<repo_id>
+    URL: GET/POST /api/deploy/<repo_id>
     
     Parameters:
-    - username: The username of the repository owner (from users collection)
     - repo_id: Repository identifier (numeric string)
     
     The endpoint retrieves repository details from the database:
@@ -856,7 +889,7 @@ def deploy_by_user_repo(username, repo_id):
     - git_token: GitHub personal access token for authentication
     
     Process:
-    1. Validate username and repo_id
+    1. Validate repo_id
     2. Retrieve repository configuration from database
     3. Download repository from GitHub using git_token
     4. Deploy to Cloudflare Pages
@@ -880,7 +913,7 @@ def deploy_by_user_repo(username, repo_id):
     }
     """
     try:
-        logger.info(f"Received deployment request for user={username}, repo_id={repo_id}")
+        logger.info(f"Received deployment request for repo_id={repo_id}")
         
         # Validate repo_id format (should be numeric string)
         # repo_id comes from URL path, so it's already a string
@@ -891,16 +924,17 @@ def deploy_by_user_repo(username, repo_id):
             }), 400
         
         # Get repository details from MongoDB (new structure)
-        repo_doc = get_repo_by_user_and_id(username, repo_id)
+        repo_doc = get_repo_by_id(repo_id)
         
         if not repo_doc:
             return jsonify({
                 'success': False,
-                'message': f'Repository {repo_id} not found for user {username}'
+                'message': f'Repository {repo_id} not found'
             }), 404
         
         git_token = repo_doc.get('git_token')
         git_url = repo_doc.get('git_url')
+        username = repo_doc.get('username')
         
         if not git_token:
             return jsonify({
