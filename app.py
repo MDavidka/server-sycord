@@ -1032,14 +1032,14 @@ def get_deployment_domain(repo_id):
             }), 404
 
         git_url = repo_doc.get('git_url')
-        repo_name_from_db = repo_doc.get('repo_name')
-        owner, repo_name_from_url = parse_git_url(git_url)
-        repo_name = repo_name_from_db or repo_name_from_url
+        repo_name_db = repo_doc.get('repo_name')
+        owner, repo_name_url = parse_git_url(git_url)
+        repo_name = repo_name_db or repo_name_url
 
         if not repo_name:
             return jsonify({
                 'success': False,
-                'message': 'Repository name not found for repository'
+                'message': f'Repository name not found for repository {repo_id}'
             }), 404
 
         project_name = sanitize_project_name(repo_name)
