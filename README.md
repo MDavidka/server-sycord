@@ -70,29 +70,48 @@ cp .env.example .env
 
 Edit `.env` and set your configuration:
 - `MONGO_URI`: MongoDB connection string
-- `MONGO_DB`: Database name (default: `test`)
-- `MONGO_COLLECTION`: Collection name (default: `github_tokens`)
-- `PROJECT_ID`: MongoDB ObjectId for GitHub token lookup
+- `MONGO_DB`: Database name (default: `main`)
+- `MONGO_COLLECTION`: Collection name (default: `users`)
 - `CLOUDFLARE_API_TOKEN`: Your Cloudflare API token
 - `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
 
 ## MongoDB Document Structure
 
-GitHub repositories should be stored in MongoDB with the following structure:
+Git repositories are stored in MongoDB with the following structure:
+
+**Database Structure:** `main > users > {username} > git_connection > [{repo documents}]`
+
+Each user document in the `users` collection should have:
 
 ```json
 {
-  "_id": ObjectId("6954ed250d9fa1238cb13e3c"),
-  "owner": "your-github-username",
-  "repo": "your-repository",
-  "token": "github_personal_access_token",
-  "default_branch": "main"
+  "_id": ObjectId("..."),
+  "username": "user1",
+  "git_connection": [
+    {
+      "username": "user1",
+      "repo_id": "12345",
+      "git_url": "https://github.com/owner/repository-name",
+      "git_token": "github_personal_access_token"
+    },
+    {
+      "username": "user1",
+      "repo_id": "67890",
+      "git_url": "https://github.com/owner/another-repo",
+      "git_token": "github_personal_access_token"
+    }
+  ]
 }
 ```
 
-Use the `token` field for new documents. A legacy `github_token` field is also accepted for backward compatibility. The server will use `token` when it is set, otherwise it will fall back to `github_token`.
+### Field Descriptions
 
-The preferred repository field is `repo`. A legacy `name` field is also honored for backward compatibility when `repo` is not present.
+| Field | Type | Description |
+|-------|------|-------------|
+| `username` | string | The username of the user who owns the repositories |
+| `repo_id` | string | A unique 5-digit identifier for the repository (e.g., "12345") |
+| `git_url` | string | The GitHub repository URL (HTTPS format: `https://github.com/owner/repo`) |
+| `git_token` | string | GitHub personal access token with repo access permissions |
 
 ## Usage
 
@@ -124,7 +143,7 @@ gunicorn -w 4 -b 0.0.0.0:5000 app:app
 
 ### GET /api/repos
 
-Fetch GitHub repositories stored in MongoDB (one document per repository).
+Fetch all GitHub repositories from all users in the database.
 
 **Request:**
 ```bash
@@ -137,27 +156,73 @@ curl http://localhost:5000/api/repos
   "success": true,
   "repositories": [
     {
-      "id": "123456789",
+      "username": "user1",
+      "repo_id": "12345",
+      "git_url": "https://github.com/owner/my-repo",
       "name": "my-repo",
-      "full_name": "username/my-repo",
-      "description": "Repository description",
-      "default_branch": "main",
-      "private": false
+      "owner": "owner",
+      "full_name": "owner/my-repo"
     }
   ]
 }
 ```
 
-### POST /api/deploy
+### GET /api/repos/{username}
 
-Triggers a deployment from a GitHub repository to Cloudflare Pages.
+Fetch repositories for a specific user.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:5000/api/deploy \
-  -H "Content-Type: application/json" \
-  -d '{"repo_id": "123456789"}'
+curl http://localhost:5000/api/repos/user1
 ```
+
+**Response:**
+```json
+{
+  "success": true,
+  "username": "user1",
+  "repositories": [
+    {
+      "repo_id": "12345",
+      "git_url": "https://github.com/owner/my-repo",
+      "name": "my-repo",
+      "owner": "owner",
+      "full_name": "owner/my-repo"
+    }
+  ]
+}
+```
+
+### GET/POST /api/deploy/{username}/{repo_id}
+
+Triggers a deployment from a GitHub repository to Cloudflare Pages.
+
+**URL Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `username` | string | The username of the repository owner |
+| `repo_id` | string | 5-digit repository identifier |
+
+**Request:**
+```bash
+# Using GET
+curl http://localhost:5000/api/deploy/user1/12345
+
+# Using POST
+curl -X POST http://localhost:5000/api/deploy/user1/12345
+```
+
+**What the API expects:**
+- Valid `username` that exists in the `users` collection
+- Valid `repo_id` (5-digit identifier) that matches a repository in the user's `git_connection` array
+
+**What the API provides:**
+1. Validates the username and repo_id
+2. Retrieves the repository configuration (`git_url`, `git_token`) from MongoDB
+3. Downloads the repository from GitHub using the `git_token` for authentication
+4. Creates a Cloudflare Pages project (if it doesn't exist)
+5. Deploys the repository to Cloudflare Pages using Wrangler
+6. Returns the deployment result with the live URL
 
 **Response (Success):**
 ```json
@@ -165,17 +230,55 @@ curl -X POST http://localhost:5000/api/deploy \
   "success": true,
   "message": "Deployment successful! Project: my-repo",
   "project_name": "my-repo",
+  "url": "https://my-repo.pages.dev",
+  "username": "user1",
+  "repo_id": "12345",
   "output": "..."
 }
 ```
 
-**Response (Error):**
+**Response (Error - Invalid repo_id format):**
+```json
+{
+  "success": false,
+  "message": "Invalid repo_id format. Expected 5-digit identifier."
+}
+```
+
+**Response (Error - Repository not found):**
+```json
+{
+  "success": false,
+  "message": "Repository 12345 not found for user user1"
+}
+```
+
+**Response (Error - Missing credentials):**
+```json
+{
+  "success": false,
+  "message": "GitHub token (git_token) not found for repository"
+}
+```
+
+**Response (Error - Deployment failed):**
 ```json
 {
   "success": false,
   "message": "Deployment failed",
   "error": "Error details..."
 }
+```
+
+### POST /api/deploy (Legacy)
+
+Legacy endpoint for backward compatibility. Trigger a deployment using MongoDB ObjectId.
+
+**Request:**
+```bash
+curl -X POST http://localhost:5000/api/deploy \
+  -H "Content-Type: application/json" \
+  -d '{"repo_id": "6954ed250d9fa1238cb13e3c"}'
 ```
 
 ### GET /api/health
@@ -201,7 +304,7 @@ curl http://localhost:5000/api/health
 Visit `http://localhost:5000` in your browser to access the modern dark-themed UI with:
 - M1 Instance branding
 - Real-time data sync visualization (GitHub → Cloudflare)
-- Repository selection
+- Repository selection (by username/repo_id)
 - One-click deployment
 
 ### Mobile View
@@ -213,9 +316,8 @@ Visit `http://localhost:5000` in your browser to access the modern dark-themed U
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `MONGO_URI` | MongoDB connection string | No | `mongodb://localhost:27017/` |
-| `MONGO_DB` | MongoDB database name | No | `test` |
-| `MONGO_COLLECTION` | MongoDB collection name | No | `github_tokens` |
-| `PROJECT_ID` | MongoDB ObjectId for token lookup | No | `6954ed250d9fa1238cb13e3c` |
+| `MONGO_DB` | MongoDB database name | No | `main` |
+| `MONGO_COLLECTION` | MongoDB collection name | No | `users` |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token | Yes | - |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID | Yes | - |
 | `PORT` | Server port | No | `5000` |
@@ -223,15 +325,15 @@ Visit `http://localhost:5000` in your browser to access the modern dark-themed U
 
 ## Deployment Flow
 
-1. User selects a repository from the UI
-2. Server retrieves GitHub token from MongoDB
-3. Downloads repository from GitHub as a zip archive
+1. User selects a repository from the UI (username/repo_id)
+2. Server retrieves repository config (`git_url`, `git_token`) from MongoDB
+3. Downloads repository from GitHub as a zip archive using `git_token`
 4. Extracts files to a temporary directory
 5. Creates a new Cloudflare Pages project (if needed)
 6. Executes `wrangler pages deploy` command
 7. Uploads files to Cloudflare Pages
 8. Cleans up temporary directory
-9. Returns deployment result
+9. Returns deployment result with live URL
 
 ## Troubleshooting
 
@@ -247,8 +349,13 @@ Verify your `MONGO_URI` is correct and MongoDB is running:
 mongosh "your-mongo-uri"
 ```
 
-### GitHub token not found
-Ensure the `PROJECT_ID` matches an existing document in your MongoDB collection with a `token` or `github_token` field.
+### Repository not found
+Ensure the user document has a `git_connection` array with repository entries containing `repo_id`, `git_url`, and `git_token`.
+
+### GitHub token issues
+- Ensure the `git_token` has `repo` scope permissions
+- Verify the token is not expired
+- Check if the token has access to the repository (for private repos)
 
 ### Cloudflare deployment failed
 - Verify your `CLOUDFLARE_API_TOKEN` has the correct permissions

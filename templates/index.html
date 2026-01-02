@@ -677,22 +677,27 @@
 
             <div class="api-docs" id="apiDocs">
                 <p><strong>How the API works:</strong></p>
-                <p>1. <code>/api/repos</code> (GET): Fetches the list of available repositories from the database.</p>
-                <p>2. <code>/api/deploy</code> (POST): Trigger a deployment. Accepts a JSON body with <code>{ "repo_id": "..." }</code>. The server downloads the code from GitHub and deploys it to Cloudflare Pages.</p>
-                <p>3. <code>/api/health</code> (GET): Checks if the deployment server is running.</p>
+                <p>1. <code>/api/repos</code> (GET): Fetches all repositories from the database.</p>
+                <p>2. <code>/api/repos/{username}</code> (GET): Fetches repositories for a specific user.</p>
+                <p>3. <code>/api/deploy/{username}/{repo_id}</code> (GET/POST): Trigger a deployment using username and 5-digit repo_id. The server downloads the code from GitHub using git_url and git_token, then deploys to Cloudflare Pages.</p>
+                <p>4. <code>/api/health</code> (GET): Checks if the deployment server is running.</p>
             </div>
 
             <div class="endpoint">
                 <span class="endpoint-method post">POST</span>
-                <span class="endpoint-path">/api/deploy</span>
-            </div>
-            <div class="endpoint">
-                <span class="endpoint-method get">GET</span>
-                <span class="endpoint-path">/api/health</span>
+                <span class="endpoint-path">/api/deploy/{username}/{repo_id}</span>
             </div>
             <div class="endpoint">
                 <span class="endpoint-method get">GET</span>
                 <span class="endpoint-path">/api/repos</span>
+            </div>
+            <div class="endpoint">
+                <span class="endpoint-method get">GET</span>
+                <span class="endpoint-path">/api/repos/{username}</span>
+            </div>
+            <div class="endpoint">
+                <span class="endpoint-method get">GET</span>
+                <span class="endpoint-path">/api/health</span>
             </div>
         </section>
 
@@ -709,7 +714,7 @@
     </div>
 
     <script>
-        let selectedRepoId = null;
+        let selectedRepo = null;  // Will store {username, repo_id}
 
         // Fetch repositories on page load
         async function fetchRepositories() {
@@ -758,8 +763,9 @@
         function createRepoItem(repo) {
             const repoItem = document.createElement('div');
             repoItem.className = 'repo-item';
-            repoItem.dataset.repoId = repo.id;
-            repoItem.onclick = function() { selectRepo(repo.id, this); };
+            repoItem.dataset.username = repo.username;
+            repoItem.dataset.repoId = repo.repo_id;
+            repoItem.onclick = function() { selectRepo(repo.username, repo.repo_id, this); };
             
             const repoItemInfo = document.createElement('div');
             repoItemInfo.className = 'repo-item-info';
@@ -772,14 +778,14 @@
             
             const repoName = document.createElement('div');
             repoName.className = 'repo-item-name';
-            repoName.textContent = repo.name;
+            repoName.textContent = repo.name || `repo-${repo.repo_id}`;
             
-            const repoId = document.createElement('div');
-            repoId.className = 'repo-item-id';
-            repoId.textContent = repo.id;
+            const repoIdDisplay = document.createElement('div');
+            repoIdDisplay.className = 'repo-item-id';
+            repoIdDisplay.textContent = `${repo.username}/${repo.repo_id}`;
             
             repoDetails.appendChild(repoName);
-            repoDetails.appendChild(repoId);
+            repoDetails.appendChild(repoIdDisplay);
             
             repoItemInfo.appendChild(repoItemIcon);
             repoItemInfo.appendChild(repoDetails);
@@ -793,7 +799,7 @@
             return repoItem;
         }
 
-        function selectRepo(repoId, element) {
+        function selectRepo(username, repoId, element) {
             // Deselect all items
             document.querySelectorAll('.repo-item').forEach(item => {
                 item.classList.remove('selected');
@@ -801,14 +807,14 @@
             
             // Select clicked item
             element.classList.add('selected');
-            selectedRepoId = repoId;
+            selectedRepo = { username, repo_id: repoId };
         }
 
         async function triggerDeploy() {
             const button = document.getElementById('deployBtn');
             const message = document.getElementById('message');
             
-            if (!selectedRepoId) {
+            if (!selectedRepo) {
                 message.className = 'message error show';
                 message.textContent = 'Please select a repository first';
                 return;
@@ -823,12 +829,9 @@
             message.textContent = '';
 
             try {
-                const response = await fetch('/api/deploy', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ repo_id: selectedRepoId })
+                // Use new API endpoint: /api/deploy/{username}/{repo_id}
+                const response = await fetch(`/api/deploy/${encodeURIComponent(selectedRepo.username)}/${encodeURIComponent(selectedRepo.repo_id)}`, {
+                    method: 'POST'
                 });
 
                 const data = await response.json();
