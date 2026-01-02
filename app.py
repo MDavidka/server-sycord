@@ -917,7 +917,7 @@ def deploy_by_repo(repo_id):
         
         # Validate repo_id format (should be numeric string)
         # repo_id comes from URL path, so it's already a string
-        if not repo_id or not isinstance(repo_id, str) or not re.match(r'^\d+$', repo_id):
+        if not repo_id or not re.match(r'^\d+$', repo_id):
             return jsonify({
                 'success': False,
                 'message': 'Invalid repo_id format. Expected numeric identifier.'

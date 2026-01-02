@@ -206,7 +206,7 @@ curl "http://localhost:5000/api/deploy/1126661988/domain"
 | HTTP Status | Message | Cause |
 |-------------|---------|-------|
 | 400 | Invalid repo_id format. Expected numeric identifier. | `repo_id` is not numeric |
-| 404 | Repository {repo_id} not found | Repo_id not present in git_connection |
+| 404 | Repository {repo_id} not found | repo_id not present in git_connection |
 | 404 | Repository name not found for repository | Missing `repo_name` and unparsable `git_url` |
 | 500 | Failed to retrieve deployment domain | Unexpected server error |
 
