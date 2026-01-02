@@ -23,8 +23,8 @@ app = Flask(__name__)
 
 # MongoDB configuration
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
-MONGO_DB = os.getenv('MONGO_DB', 'test')
-MONGO_COLLECTION = os.getenv('MONGO_COLLECTION', 'github_tokens')
+MONGO_DB = os.getenv('MONGO_DB', 'main')
+MONGO_COLLECTION = os.getenv('MONGO_COLLECTION', 'users')
 
 # Cloudflare configuration
 CLOUDFLARE_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN')
@@ -138,26 +138,121 @@ def get_repository_projection(include_tokens=False):
     return projection
 
 
-def get_repository_documents(include_tokens=False):
-    """Retrieve repository documents (owner/repo/token) from MongoDB"""
+def get_all_users_with_repos():
+    """
+    Retrieve all users and their git repositories from the new database structure.
+    Structure: main > users > {username} > git_connection > [{repo docs}]
+    Each repo doc contains: username, repo_id (5-digit), git_url, git_token
+    """
     try:
         client = get_mongo_client()
         db = client[MONGO_DB]
         collection = db[MONGO_COLLECTION]
-        projection = get_repository_projection(include_tokens)
-        docs = list(collection.find({}, projection))
-        logger.info(f"Retrieved {len(docs)} repository documents from MongoDB")
-        return docs
+        
+        # Find all user documents that have git_connection field
+        users = list(collection.find({'git_connection': {'$exists': True}}, {'username': 1, 'git_connection': 1}))
+        logger.info(f"Retrieved {len(users)} users with git connections from MongoDB")
+        return users
     except Exception as e:
-        logger.error(f"Error retrieving repository documents from MongoDB: {e}")
+        logger.error(f"Error retrieving users with repos from MongoDB: {e}")
         raise
     finally:
         if 'client' in locals():
             client.close()
 
 
+def get_user_repos(username):
+    """
+    Retrieve all repositories for a specific user.
+    Returns list of repo documents from git_connection field.
+    """
+    try:
+        client = get_mongo_client()
+        db = client[MONGO_DB]
+        collection = db[MONGO_COLLECTION]
+        
+        user_doc = collection.find_one({'username': username}, {'git_connection': 1})
+        
+        if user_doc and 'git_connection' in user_doc:
+            repos = user_doc['git_connection']
+            logger.info(f"Retrieved {len(repos)} repositories for user {username}")
+            return repos
+        
+        logger.warning(f"No repositories found for user {username}")
+        return []
+    except Exception as e:
+        logger.error(f"Error retrieving repositories for user {username}: {e}")
+        raise
+    finally:
+        if 'client' in locals():
+            client.close()
+
+
+def get_repo_by_user_and_id(username, repo_id):
+    """
+    Retrieve a specific repository by username and repo_id (5-digit identifier).
+    Returns the repo document with git_url and git_token.
+    """
+    try:
+        client = get_mongo_client()
+        db = client[MONGO_DB]
+        collection = db[MONGO_COLLECTION]
+        
+        # Find user document
+        user_doc = collection.find_one({'username': username}, {'git_connection': 1})
+        
+        if not user_doc or 'git_connection' not in user_doc:
+            logger.warning(f"User {username} not found or has no git connections")
+            return None
+        
+        # Find the specific repo by repo_id
+        for repo in user_doc['git_connection']:
+            if str(repo.get('repo_id')) == str(repo_id):
+                logger.info(f"Found repository {repo_id} for user {username}")
+                return repo
+        
+        logger.warning(f"Repository {repo_id} not found for user {username}")
+        return None
+    except Exception as e:
+        logger.error(f"Error retrieving repository {repo_id} for user {username}: {e}")
+        raise
+    finally:
+        if 'client' in locals():
+            client.close()
+
+
+def get_repository_documents(include_tokens=False):
+    """
+    Retrieve all repository documents from all users.
+    This aggregates repos from the new structure: main > users > git_connection
+    """
+    try:
+        users = get_all_users_with_repos()
+        all_repos = []
+        
+        for user in users:
+            username = user.get('username', 'unknown')
+            repos = user.get('git_connection', [])
+            
+            for repo in repos:
+                repo_doc = {
+                    'username': username,
+                    'repo_id': repo.get('repo_id'),
+                    'git_url': repo.get('git_url'),
+                }
+                if include_tokens:
+                    repo_doc['git_token'] = repo.get('git_token')
+                all_repos.append(repo_doc)
+        
+        logger.info(f"Retrieved {len(all_repos)} total repository documents")
+        return all_repos
+    except Exception as e:
+        logger.error(f"Error retrieving repository documents: {e}")
+        raise
+
+
 def get_repository_document_by_id(repo_id, include_tokens=False):
-    """Retrieve a single repository document by its ID"""
+    """Retrieve a single repository document by its ID (legacy support)"""
     try:
         client = get_mongo_client()
         db = client[MONGO_DB]
@@ -188,6 +283,32 @@ def get_repository_name(repo_doc):
 def get_repository_token(repo_doc):
     """Return repository token, preferring 'token' and falling back to legacy 'github_token'. Returns None if neither exists."""
     return repo_doc.get('token') or repo_doc.get('github_token')
+
+
+def parse_git_url(git_url):
+    """
+    Parse a git URL to extract owner and repo name.
+    Supports formats like:
+    - https://github.com/owner/repo
+    - https://github.com/owner/repo.git
+    - git@github.com:owner/repo.git
+    Returns (owner, repo_name) tuple or (None, None) if parsing fails.
+    """
+    if not git_url:
+        return None, None
+    
+    # HTTPS format
+    https_match = re.match(r'https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?$', git_url)
+    if https_match:
+        return https_match.group(1), https_match.group(2)
+    
+    # SSH format
+    ssh_match = re.match(r'git@github\.com:([^/]+)/([^/]+?)(?:\.git)?$', git_url)
+    if ssh_match:
+        return ssh_match.group(1), ssh_match.group(2)
+    
+    logger.warning(f"Could not parse git URL: {git_url}")
+    return None, None
 
 
 def get_github_repositories(github_token):
@@ -561,11 +682,29 @@ def index():
 
 @app.route('/api/repos', methods=['GET'])
 def get_repos():
-    """API endpoint to fetch GitHub repositories"""
+    """
+    API endpoint to fetch GitHub repositories from new database structure.
+    
+    Structure: main > users > {username} > git_connection > [{repo docs}]
+    Each repo doc contains: username, repo_id (5-digit), git_url, git_token
+    
+    Response format:
+    {
+        "success": true,
+        "repositories": [
+            {
+                "username": "user1",
+                "repo_id": "12345",
+                "git_url": "https://github.com/owner/repo",
+                "name": "repo"
+            }
+        ]
+    }
+    """
     try:
-        logger.info("Fetching GitHub repositories")
+        logger.info("Fetching GitHub repositories from new structure")
         
-        # Get repository documents from MongoDB
+        # Get repository documents from MongoDB (new structure)
         repo_docs = get_repository_documents()
         
         if not repo_docs:
@@ -578,20 +717,24 @@ def get_repos():
         # Format repositories for frontend
         formatted_repos = []
         for repo_doc in repo_docs:
-            repo_name = get_repository_name(repo_doc)
-            owner = repo_doc.get('owner')
+            username = repo_doc.get('username')
+            repo_id = repo_doc.get('repo_id')
+            git_url = repo_doc.get('git_url')
             
-            if not owner or not repo_name:
-                logger.warning(f"Skipping repository document missing owner or name: {repo_doc.get('_id')}")
+            if not username or not repo_id:
+                logger.warning(f"Skipping repository document missing username or repo_id")
                 continue
             
+            # Extract repo name from git_url
+            owner, repo_name = parse_git_url(git_url)
+            
             formatted_repos.append({
-                'id': str(repo_doc.get('_id')),
-                'name': repo_name,
-                'full_name': f"{owner}/{repo_name}",
-                'description': repo_doc.get('description', ''),
-                'default_branch': repo_doc.get('default_branch', 'main'),
-                'private': repo_doc.get('private', False)
+                'username': username,
+                'repo_id': str(repo_id),
+                'git_url': git_url,
+                'name': repo_name or f'repo-{repo_id}',
+                'owner': owner,
+                'full_name': f"{owner}/{repo_name}" if owner and repo_name else None
             })
         
         return jsonify({
@@ -609,9 +752,197 @@ def get_repos():
         }), 500
 
 
+@app.route('/api/repos/<username>', methods=['GET'])
+def get_user_repos_endpoint(username):
+    """
+    API endpoint to fetch repositories for a specific user.
+    
+    URL: GET /api/repos/<username>
+    
+    Response format:
+    {
+        "success": true,
+        "username": "user1",
+        "repositories": [
+            {
+                "repo_id": "12345",
+                "git_url": "https://github.com/owner/repo",
+                "name": "repo"
+            }
+        ]
+    }
+    """
+    try:
+        logger.info(f"Fetching repositories for user: {username}")
+        
+        repos = get_user_repos(username)
+        
+        formatted_repos = []
+        for repo in repos:
+            git_url = repo.get('git_url')
+            owner, repo_name = parse_git_url(git_url)
+            
+            formatted_repos.append({
+                'repo_id': str(repo.get('repo_id')),
+                'git_url': git_url,
+                'name': repo_name or f'repo-{repo.get("repo_id")}',
+                'owner': owner,
+                'full_name': f"{owner}/{repo_name}" if owner and repo_name else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'username': username,
+            'repositories': formatted_repos
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching repositories for user {username}: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to fetch repositories for user {username}',
+            'error': str(e),
+            'repositories': []
+        }), 500
+
+
+@app.route('/api/deploy/<username>/<repo_id>', methods=['GET', 'POST'])
+def deploy_by_user_repo(username, repo_id):
+    """
+    API endpoint to trigger deployment for a specific user's repository.
+    
+    URL: GET/POST /api/deploy/<username>/<repo_id>
+    
+    Parameters:
+    - username: The username of the repository owner (from users collection)
+    - repo_id: 5-digit repository identifier
+    
+    The endpoint retrieves repository details from the database:
+    - git_url: GitHub repository URL
+    - git_token: GitHub personal access token for authentication
+    
+    Process:
+    1. Validate username and repo_id
+    2. Retrieve repository configuration from database
+    3. Download repository from GitHub using git_token
+    4. Deploy to Cloudflare Pages
+    5. Return deployment result with URL
+    
+    Response format (success):
+    {
+        "success": true,
+        "message": "Deployment successful! Project: repo-name",
+        "project_name": "repo-name",
+        "url": "https://repo-name.pages.dev",
+        "username": "user1",
+        "repo_id": "12345"
+    }
+    
+    Response format (error):
+    {
+        "success": false,
+        "message": "Error description",
+        "error": "Detailed error message"
+    }
+    """
+    try:
+        logger.info(f"Received deployment request for user={username}, repo_id={repo_id}")
+        
+        # Validate repo_id format (should be 5 digits)
+        if not repo_id or not re.match(r'^\d{5}$', str(repo_id)):
+            return jsonify({
+                'success': False,
+                'message': 'Invalid repo_id format. Expected 5-digit identifier.'
+            }), 400
+        
+        # Get repository details from MongoDB (new structure)
+        repo_doc = get_repo_by_user_and_id(username, repo_id)
+        
+        if not repo_doc:
+            return jsonify({
+                'success': False,
+                'message': f'Repository {repo_id} not found for user {username}'
+            }), 404
+        
+        git_token = repo_doc.get('git_token')
+        git_url = repo_doc.get('git_url')
+        
+        if not git_token:
+            return jsonify({
+                'success': False,
+                'message': 'GitHub token (git_token) not found for repository'
+            }), 404
+        
+        if not git_url:
+            return jsonify({
+                'success': False,
+                'message': 'Git URL (git_url) not found for repository'
+            }), 404
+        
+        # Parse git_url to extract owner and repo name
+        owner, repo_name = parse_git_url(git_url)
+        
+        if not owner or not repo_name:
+            return jsonify({
+                'success': False,
+                'message': f'Could not parse git_url: {git_url}'
+            }), 400
+        
+        repo_full_name = f"{owner}/{repo_name}"
+        default_branch = 'main'  # Default branch
+        
+        # Generate Cloudflare project name from repo name (sanitized)
+        cf_project_name = sanitize_project_name(repo_name)
+        
+        # Create Cloudflare project if it doesn't exist
+        create_cloudflare_project(cf_project_name)
+        
+        # Download repository from GitHub
+        temp_dir = download_github_repo(git_token, repo_full_name, default_branch)
+        
+        if not temp_dir:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to download repository from GitHub'
+            }), 500
+        
+        try:
+            # Deploy to Cloudflare Pages
+            result = deploy_to_cloudflare_pages(temp_dir, cf_project_name)
+            
+            if result['success']:
+                return jsonify({
+                    'success': True,
+                    'message': f'Deployment successful! Project: {cf_project_name}',
+                    'project_name': cf_project_name,
+                    'url': result.get('url'),
+                    'username': username,
+                    'repo_id': repo_id,
+                    'output': result['output']
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': 'Deployment failed',
+                    'error': result['error']
+                }), 500
+        finally:
+            # Clean up temporary directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            logger.info(f"Cleaned up temporary directory: {temp_dir}")
+    
+    except Exception as e:
+        logger.error(f"Deployment error: {e}")
+        return jsonify({
+            'success': False,
+            'message': 'Deployment failed',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/deploy', methods=['POST'])
 def deploy():
-    """API endpoint to trigger deployment from GitHub repository"""
+    """API endpoint to trigger deployment from GitHub repository (legacy support)"""
     try:
         logger.info("Received deployment request")
         
