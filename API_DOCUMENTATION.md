@@ -21,33 +21,43 @@ The API expects repositories to be stored in MongoDB with the following structur
 
 **Database:** `main`  
 **Collection:** `users`  
-**Path:** `main > users > {username} > git_connection > [{repo documents}]`
+**Path:** `main > users > {username} > git_connection > {repo_id: {repo document}}`
 
 ### User Document Schema
 
 ```json
 {
   "_id": ObjectId("..."),
-  "username": "user1",
-  "git_connection": [
-    {
-      "username": "user1",
-      "repo_id": "12345",
-      "git_url": "https://github.com/owner/repository-name",
-      "git_token": "ghp_xxxxxxxxxxxxxxxxxxxx"
+  "username": "MDavidka",
+  "git_connection": {
+    "1126661988": {
+      "username": "MDavidka",
+      "repo_id": "1126661988",
+      "git_url": "https://github.com/MDavidka/tesf",
+      "git_token": "ghp_xxxxxxxxxxxxxxxxxxxx",
+      "repo_name": "tesf",
+      "project_id": "6957a3fb538e5f68b68b58f7",
+      "deployed_at": {
+        "$date": "2026-01-02T10:56:42.117Z"
+      }
     }
-  ]
+  }
 }
 ```
+
+Note: `git_connection` is a **dictionary/object** where keys are the `repo_id` values and values are the repository documents.
 
 ### Field Descriptions
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `username` | string | Yes | The username of the repository owner in the system |
-| `repo_id` | string | Yes | A unique **5-digit** identifier for the repository (e.g., "12345", "00001", "99999") |
+| `repo_id` | string | Yes | A unique numeric identifier for the repository (e.g., "1126661988") |
 | `git_url` | string | Yes | The GitHub repository URL in HTTPS format (e.g., `https://github.com/owner/repo`) |
 | `git_token` | string | Yes | GitHub personal access token with `repo` scope for accessing the repository |
+| `repo_name` | string | No | The repository name (optional, can be parsed from git_url) |
+| `project_id` | string | No | The Cloudflare project ID after deployment |
+| `deployed_at` | date | No | Timestamp of the last deployment |
 
 ---
 
@@ -64,25 +74,25 @@ This is the primary deployment endpoint that triggers a deployment from a GitHub
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `username` | string | Yes | The username of the repository owner |
-| `repo_id` | string | Yes | **5-digit** repository identifier |
+| `repo_id` | string | Yes | Numeric repository identifier |
 
 #### What the API Expects
 
 1. **Valid `username`** - Must exist in the `users` collection
-2. **Valid `repo_id`** - Must be exactly 5 digits (00000-99999)
+2. **Valid `repo_id`** - Must be a numeric string
 3. **Repository document** - Must contain `git_url` and `git_token`
 
 #### Request Examples
 
 ```bash
 # Using GET request
-curl "http://localhost:5000/api/deploy/user1/12345"
+curl "http://localhost:5000/api/deploy/MDavidka/1126661988"
 
 # Using POST request
-curl -X POST "http://localhost:5000/api/deploy/user1/12345"
+curl -X POST "http://localhost:5000/api/deploy/MDavidka/1126661988"
 
 # Using POST with headers (no body required)
-curl -X POST "http://localhost:5000/api/deploy/user1/12345" \
+curl -X POST "http://localhost:5000/api/deploy/MDavidka/1126661988" \
   -H "Accept: application/json"
 ```
 
@@ -91,7 +101,7 @@ curl -X POST "http://localhost:5000/api/deploy/user1/12345" \
 The API performs the following actions:
 
 1. **Validation**
-   - Validates that `repo_id` is exactly 5 digits
+   - Validates that `repo_id` is a numeric string
    - Checks that the user exists in the database
    - Verifies the repository entry exists in `git_connection`
 
@@ -114,11 +124,11 @@ The API performs the following actions:
 ```json
 {
   "success": true,
-  "message": "Deployment successful! Project: my-repo",
-  "project_name": "my-repo",
-  "url": "https://my-repo.pages.dev",
-  "username": "user1",
-  "repo_id": "12345",
+  "message": "Deployment successful! Project: tesf",
+  "project_name": "tesf",
+  "url": "https://tesf.pages.dev",
+  "username": "MDavidka",
+  "repo_id": "1126661988",
   "output": "Wrangler CLI output..."
 }
 ```
@@ -147,7 +157,7 @@ The API performs the following actions:
 
 | HTTP Status | Message | Cause |
 |-------------|---------|-------|
-| 400 | Invalid repo_id format. Expected 5-digit identifier. | `repo_id` is not exactly 5 digits |
+| 400 | Invalid repo_id format. Expected numeric identifier. | `repo_id` is not numeric |
 | 404 | Repository {repo_id} not found for user {username} | User or repository doesn't exist |
 | 404 | GitHub token (git_token) not found for repository | Missing `git_token` in database |
 | 404 | Git URL (git_url) not found for repository | Missing `git_url` in database |
@@ -171,7 +181,7 @@ curl "http://localhost:5000/api/repos"
 
 #### What the API Provides
 
-- Retrieves all user documents with `git_connection` arrays
+- Retrieves all user documents with `git_connection` dictionaries
 - Parses each `git_url` to extract owner and repository name
 - Returns a flattened list of all repositories
 
@@ -182,20 +192,12 @@ curl "http://localhost:5000/api/repos"
   "success": true,
   "repositories": [
     {
-      "username": "user1",
-      "repo_id": "12345",
-      "git_url": "https://github.com/owner/my-repo",
-      "name": "my-repo",
-      "owner": "owner",
-      "full_name": "owner/my-repo"
-    },
-    {
-      "username": "user2",
-      "repo_id": "67890",
-      "git_url": "https://github.com/another-owner/another-repo",
-      "name": "another-repo",
-      "owner": "another-owner",
-      "full_name": "another-owner/another-repo"
+      "username": "MDavidka",
+      "repo_id": "1126661988",
+      "git_url": "https://github.com/MDavidka/tesf",
+      "name": "tesf",
+      "owner": "MDavidka",
+      "full_name": "MDavidka/tesf"
     }
   ]
 }
@@ -204,9 +206,9 @@ curl "http://localhost:5000/api/repos"
 | Field | Type | Description |
 |-------|------|-------------|
 | `username` | string | User who owns this repository entry |
-| `repo_id` | string | 5-digit repository identifier |
+| `repo_id` | string | Repository identifier |
 | `git_url` | string | Full GitHub repository URL |
-| `name` | string | Repository name (parsed from git_url) |
+| `name` | string | Repository name (from repo_name field or parsed from git_url) |
 | `owner` | string | GitHub owner/organization (parsed from git_url) |
 | `full_name` | string | Full repository path (owner/repo) |
 
@@ -227,7 +229,7 @@ Fetches all repositories for a specific user.
 #### Request
 
 ```bash
-curl "http://localhost:5000/api/repos/user1"
+curl "http://localhost:5000/api/repos/MDavidka"
 ```
 
 #### Response Format
@@ -235,14 +237,14 @@ curl "http://localhost:5000/api/repos/user1"
 ```json
 {
   "success": true,
-  "username": "user1",
+  "username": "MDavidka",
   "repositories": [
     {
-      "repo_id": "12345",
-      "git_url": "https://github.com/owner/my-repo",
-      "name": "my-repo",
-      "owner": "owner",
-      "full_name": "owner/my-repo"
+      "repo_id": "1126661988",
+      "git_url": "https://github.com/MDavidka/tesf",
+      "name": "tesf",
+      "owner": "MDavidka",
+      "full_name": "MDavidka/tesf"
     }
   ]
 }
@@ -311,12 +313,12 @@ All error responses follow this format:
 
 2. VALIDATION
    ┌─────────────────┐
-   │ Validate Input  │ → Check repo_id is 5 digits
+   │ Validate Input  │ → Check repo_id is numeric
    └─────────────────┘
 
 3. DATABASE LOOKUP
    ┌─────────────────┐
-   │ MongoDB Query   │ → Find user → Find repo in git_connection
+   │ MongoDB Query   │ → Find user → Find repo in git_connection[repo_id]
    └─────────────────┘
          │
          ▼
@@ -361,14 +363,14 @@ All error responses follow this format:
 curl http://localhost:5000/api/repos
 
 # 2. Deploy a specific repository
-curl -X POST http://localhost:5000/api/deploy/user1/12345
+curl -X POST http://localhost:5000/api/deploy/MDavidka/1126661988
 
 # 3. Check deployment result
 # Response:
 # {
 #   "success": true,
-#   "message": "Deployment successful! Project: my-repo",
-#   "url": "https://my-repo.pages.dev",
+#   "message": "Deployment successful! Project: tesf",
+#   "url": "https://tesf.pages.dev",
 #   ...
 # }
 ```
@@ -395,13 +397,15 @@ if (result.success) {
 
 ## Notes
 
-1. **5-Digit repo_id**: The `repo_id` must be exactly 5 digits (00000-99999). This is validated on every deploy request.
+1. **repo_id Format**: The `repo_id` must be a numeric string. This is validated on every deploy request.
 
-2. **git_url Format**: The API supports GitHub URLs in these formats:
+2. **git_connection Structure**: `git_connection` is a dictionary where keys are `repo_id` values and values are the repository documents.
+
+3. **git_url Format**: The API supports GitHub URLs in these formats:
    - `https://github.com/owner/repo`
    - `https://github.com/owner/repo.git`
    - `git@github.com:owner/repo.git`
 
-3. **git_token Permissions**: The GitHub token must have `repo` scope to access private repositories.
+4. **git_token Permissions**: The GitHub token must have `repo` scope to access private repositories.
 
-4. **Cloudflare Project Names**: Repository names are sanitized for Cloudflare (lowercase, alphanumeric and hyphens only, max 63 characters).
+5. **Cloudflare Project Names**: Repository names are sanitized for Cloudflare (lowercase, alphanumeric and hyphens only, max 63 characters).

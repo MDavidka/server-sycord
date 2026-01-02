@@ -141,8 +141,9 @@ def get_repository_projection(include_tokens=False):
 def get_all_users_with_repos():
     """
     Retrieve all users and their git repositories from the new database structure.
-    Structure: main > users > {username} > git_connection > [{repo docs}]
-    Each repo doc contains: username, repo_id (5-digit), git_url, git_token
+    Structure: main > users > {username} > git_connection > {repo_id: {repo doc}}
+    git_connection is a dictionary where keys are repo_ids and values are repo documents.
+    Each repo doc contains: username, repo_id, git_url, git_token, repo_name, project_id, deployed_at
     """
     try:
         client = get_mongo_client()
@@ -165,6 +166,7 @@ def get_user_repos(username):
     """
     Retrieve all repositories for a specific user.
     Returns list of repo documents from git_connection field.
+    git_connection is a dictionary where keys are repo_ids and values are repo documents.
     """
     try:
         client = get_mongo_client()
@@ -174,7 +176,14 @@ def get_user_repos(username):
         user_doc = collection.find_one({'username': username}, {'git_connection': 1})
         
         if user_doc and 'git_connection' in user_doc:
-            repos = user_doc['git_connection']
+            git_connection = user_doc['git_connection']
+            # git_connection is a dictionary {repo_id: repo_doc}
+            # Convert to list of repo documents
+            if isinstance(git_connection, dict):
+                repos = list(git_connection.values())
+            else:
+                # Fallback for legacy array format
+                repos = git_connection
             logger.info(f"Retrieved {len(repos)} repositories for user {username}")
             return repos
         
@@ -190,8 +199,9 @@ def get_user_repos(username):
 
 def get_repo_by_user_and_id(username, repo_id):
     """
-    Retrieve a specific repository by username and repo_id (5-digit identifier).
+    Retrieve a specific repository by username and repo_id.
     Returns the repo document with git_url and git_token.
+    git_connection is a dictionary where keys are repo_ids.
     """
     try:
         client = get_mongo_client()
@@ -205,13 +215,21 @@ def get_repo_by_user_and_id(username, repo_id):
             logger.warning(f"User {username} not found or has no git connections")
             return None
         
-        # Find the specific repo by repo_id (normalize to 5-digit zero-padded string)
-        normalized_repo_id = str(repo_id).zfill(5)
-        for repo in user_doc['git_connection']:
-            stored_repo_id = str(repo.get('repo_id', '')).zfill(5)
-            if stored_repo_id == normalized_repo_id:
+        git_connection = user_doc['git_connection']
+        repo_id_str = str(repo_id)
+        
+        # git_connection is a dictionary {repo_id: repo_doc}
+        if isinstance(git_connection, dict):
+            # Direct lookup by key
+            if repo_id_str in git_connection:
                 logger.info(f"Found repository {repo_id} for user {username}")
-                return repo
+                return git_connection[repo_id_str]
+        else:
+            # Fallback for legacy array format
+            for repo in git_connection:
+                if str(repo.get('repo_id', '')) == repo_id_str:
+                    logger.info(f"Found repository {repo_id} for user {username}")
+                    return repo
         
         logger.warning(f"Repository {repo_id} not found for user {username}")
         return None
@@ -227,6 +245,7 @@ def get_repository_documents(include_tokens=False):
     """
     Retrieve all repository documents from all users.
     This aggregates repos from the new structure: main > users > git_connection
+    git_connection is a dictionary where keys are repo_ids and values are repo documents.
     """
     try:
         users = get_all_users_with_repos()
@@ -234,13 +253,21 @@ def get_repository_documents(include_tokens=False):
         
         for user in users:
             username = user.get('username', 'unknown')
-            repos = user.get('git_connection', [])
+            git_connection = user.get('git_connection', {})
+            
+            # git_connection is a dictionary {repo_id: repo_doc}
+            if isinstance(git_connection, dict):
+                repos = git_connection.values()
+            else:
+                # Fallback for legacy array format
+                repos = git_connection
             
             for repo in repos:
                 repo_doc = {
                     'username': username,
                     'repo_id': repo.get('repo_id'),
                     'git_url': repo.get('git_url'),
+                    'repo_name': repo.get('repo_name'),
                 }
                 if include_tokens:
                     repo_doc['git_token'] = repo.get('git_token')
@@ -687,8 +714,9 @@ def get_repos():
     """
     API endpoint to fetch GitHub repositories from new database structure.
     
-    Structure: main > users > {username} > git_connection > [{repo docs}]
-    Each repo doc contains: username, repo_id (5-digit), git_url, git_token
+    Structure: main > users > {username} > git_connection > {repo_id: {repo doc}}
+    git_connection is a dictionary where keys are repo_ids.
+    Each repo doc contains: username, repo_id, git_url, git_token, repo_name, project_id, deployed_at
     
     Response format:
     {
@@ -696,7 +724,7 @@ def get_repos():
         "repositories": [
             {
                 "username": "user1",
-                "repo_id": "12345",
+                "repo_id": "1126661988",
                 "git_url": "https://github.com/owner/repo",
                 "name": "repo"
             }
@@ -722,21 +750,23 @@ def get_repos():
             username = repo_doc.get('username')
             repo_id = repo_doc.get('repo_id')
             git_url = repo_doc.get('git_url')
+            repo_name_from_db = repo_doc.get('repo_name')
             
             if not username or not repo_id:
                 logger.warning(f"Skipping repository document missing username or repo_id")
                 continue
             
-            # Extract repo name from git_url
-            owner, repo_name = parse_git_url(git_url)
+            # Extract repo name from git_url or use repo_name from database
+            owner, repo_name_from_url = parse_git_url(git_url)
+            repo_name = repo_name_from_db or repo_name_from_url or f'repo-{repo_id}'
             
             formatted_repos.append({
                 'username': username,
                 'repo_id': str(repo_id),
                 'git_url': git_url,
-                'name': repo_name or f'repo-{repo_id}',
+                'name': repo_name,
                 'owner': owner,
-                'full_name': f"{owner}/{repo_name}" if owner and repo_name else None
+                'full_name': f"{owner}/{repo_name_from_url}" if owner and repo_name_from_url else None
             })
         
         return jsonify({
@@ -767,7 +797,7 @@ def get_user_repos_endpoint(username):
         "username": "user1",
         "repositories": [
             {
-                "repo_id": "12345",
+                "repo_id": "1126661988",
                 "git_url": "https://github.com/owner/repo",
                 "name": "repo"
             }
@@ -782,14 +812,16 @@ def get_user_repos_endpoint(username):
         formatted_repos = []
         for repo in repos:
             git_url = repo.get('git_url')
-            owner, repo_name = parse_git_url(git_url)
+            repo_name_from_db = repo.get('repo_name')
+            owner, repo_name_from_url = parse_git_url(git_url)
+            repo_name = repo_name_from_db or repo_name_from_url or f'repo-{repo.get("repo_id")}'
             
             formatted_repos.append({
                 'repo_id': str(repo.get('repo_id')),
                 'git_url': git_url,
-                'name': repo_name or f'repo-{repo.get("repo_id")}',
+                'name': repo_name,
                 'owner': owner,
-                'full_name': f"{owner}/{repo_name}" if owner and repo_name else None
+                'full_name': f"{owner}/{repo_name_from_url}" if owner and repo_name_from_url else None
             })
         
         return jsonify({
@@ -817,7 +849,7 @@ def deploy_by_user_repo(username, repo_id):
     
     Parameters:
     - username: The username of the repository owner (from users collection)
-    - repo_id: 5-digit repository identifier
+    - repo_id: Repository identifier (numeric string)
     
     The endpoint retrieves repository details from the database:
     - git_url: GitHub repository URL
@@ -850,12 +882,12 @@ def deploy_by_user_repo(username, repo_id):
     try:
         logger.info(f"Received deployment request for user={username}, repo_id={repo_id}")
         
-        # Validate repo_id format (should be 5 digits)
+        # Validate repo_id format (should be numeric string)
         # repo_id comes from URL path, so it's already a string
-        if not repo_id or not isinstance(repo_id, str) or not re.match(r'^\d{5}$', repo_id):
+        if not repo_id or not isinstance(repo_id, str) or not re.match(r'^\d+$', repo_id):
             return jsonify({
                 'success': False,
-                'message': 'Invalid repo_id format. Expected 5-digit identifier.'
+                'message': 'Invalid repo_id format. Expected numeric identifier.'
             }), 400
         
         # Get repository details from MongoDB (new structure)
