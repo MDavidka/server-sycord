@@ -63,36 +63,34 @@ Note: `git_connection` is a **dictionary/object** where keys are the `repo_id` v
 
 ## API Endpoints
 
-### Deploy by Username and Repo ID
+### Deploy by Repo ID
 
-**Endpoint:** `GET/POST /api/deploy/{username}/{repo_id}`
+**Endpoint:** `GET/POST /api/deploy/{repo_id}`
 
-This is the primary deployment endpoint that triggers a deployment from a GitHub repository to Cloudflare Pages.
+This is the primary deployment endpoint that triggers a deployment from a GitHub repository to Cloudflare Pages using only the repository ID.
 
 #### URL Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `username` | string | Yes | The username of the repository owner |
 | `repo_id` | string | Yes | Numeric repository identifier |
 
 #### What the API Expects
 
-1. **Valid `username`** - Must exist in the `users` collection
-2. **Valid `repo_id`** - Must be a numeric string
-3. **Repository document** - Must contain `git_url` and `git_token`
+1. **Valid `repo_id`** - Must be a numeric string
+2. **Repository document** - Must contain `git_url` and `git_token`
 
 #### Request Examples
 
 ```bash
 # Using GET request
-curl "http://localhost:5000/api/deploy/MDavidka/1126661988"
+curl "http://localhost:5000/api/deploy/1126661988"
 
 # Using POST request
-curl -X POST "http://localhost:5000/api/deploy/MDavidka/1126661988"
+curl -X POST "http://localhost:5000/api/deploy/1126661988"
 
 # Using POST with headers (no body required)
-curl -X POST "http://localhost:5000/api/deploy/MDavidka/1126661988" \
+curl -X POST "http://localhost:5000/api/deploy/1126661988" \
   -H "Accept: application/json"
 ```
 
@@ -102,7 +100,6 @@ The API performs the following actions:
 
 1. **Validation**
    - Validates that `repo_id` is a numeric string
-   - Checks that the user exists in the database
    - Verifies the repository entry exists in `git_connection`
 
 2. **Repository Retrieval**
@@ -308,7 +305,7 @@ All error responses follow this format:
 
 1. REQUEST
    ┌─────────────────┐
-   │ Client Request  │ → GET/POST /api/deploy/{username}/{repo_id}
+   │ Client Request  │ → GET/POST /api/deploy/{repo_id}
    └─────────────────┘
 
 2. VALIDATION
@@ -318,7 +315,7 @@ All error responses follow this format:
 
 3. DATABASE LOOKUP
    ┌─────────────────┐
-   │ MongoDB Query   │ → Find user → Find repo in git_connection[repo_id]
+   │ MongoDB Query   │ → Find repo in git_connection[repo_id] across users
    └─────────────────┘
          │
          ▼
@@ -363,7 +360,7 @@ All error responses follow this format:
 curl http://localhost:5000/api/repos
 
 # 2. Deploy a specific repository
-curl -X POST http://localhost:5000/api/deploy/MDavidka/1126661988
+curl -X POST http://localhost:5000/api/deploy/1126661988
 
 # 3. Check deployment result
 # Response:
@@ -383,7 +380,7 @@ const reposResponse = await fetch('/api/repos');
 const { repositories } = await reposResponse.json();
 
 // Deploy a repository
-const deployResponse = await fetch(`/api/deploy/${username}/${repo_id}`, {
+const deployResponse = await fetch(`/api/deploy/${repo_id}`, {
   method: 'POST'
 });
 const result = await deployResponse.json();

@@ -679,13 +679,13 @@
                 <p><strong>How the API works:</strong></p>
                 <p>1. <code>/api/repos</code> (GET): Fetches all repositories from the database.</p>
                 <p>2. <code>/api/repos/{username}</code> (GET): Fetches repositories for a specific user.</p>
-                <p>3. <code>/api/deploy/{username}/{repo_id}</code> (GET/POST): Trigger a deployment using username and repo_id. The server downloads the code from GitHub using git_url and git_token, then deploys to Cloudflare Pages.</p>
+                <p>3. <code>/api/deploy/{repo_id}</code> (GET/POST): Trigger a deployment using repo_id. The server downloads the code from GitHub using git_url and git_token, then deploys to Cloudflare Pages.</p>
                 <p>4. <code>/api/health</code> (GET): Checks if the deployment server is running.</p>
             </div>
 
             <div class="endpoint">
                 <span class="endpoint-method post">POST</span>
-                <span class="endpoint-path">/api/deploy/{username}/{repo_id}</span>
+                <span class="endpoint-path">/api/deploy/{repo_id}</span>
             </div>
             <div class="endpoint">
                 <span class="endpoint-method get">GET</span>
@@ -829,8 +829,8 @@
             message.textContent = '';
 
             try {
-                // Use new API endpoint: /api/deploy/{username}/{repo_id}
-                const response = await fetch(`/api/deploy/${encodeURIComponent(selectedRepo.username)}/${encodeURIComponent(selectedRepo.repo_id)}`, {
+                // Use deployment endpoint: /api/deploy/{repo_id}
+                const response = await fetch(`/api/deploy/${encodeURIComponent(selectedRepo.repo_id)}`, {
                     method: 'POST'
                 });
 
