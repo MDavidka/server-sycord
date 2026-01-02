@@ -283,7 +283,11 @@ curl http://localhost:5000/api/deploy/12345/domain
   "success": true,
   "repo_id": "12345",
   "project_name": "my-repo",
-  "domain": "https://my-repo.pages.dev"
+  "domain": "https://my-repo.pages.dev",
+  "username": "user1",
+  "git_url": "https://github.com/owner/my-repo",
+  "owner": "owner",
+  "repo_name": "my-repo"
 }
 ```
 

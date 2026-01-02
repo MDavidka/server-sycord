@@ -1017,7 +1017,7 @@ def get_deployment_domain(repo_id):
     try:
         logger.info(f"Fetching deployment domain for repo_id={repo_id}")
 
-        if not repo_id or not isinstance(repo_id, str) or not re.match(r'^\\d+$', repo_id):
+        if not repo_id or not isinstance(repo_id, str) or not re.match(r'^\d+$', repo_id):
             return jsonify({
                 'success': False,
                 'message': 'Invalid repo_id format. Expected numeric identifier.'
