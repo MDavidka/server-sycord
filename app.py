@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import shutil
 import requests
+from collections import deque
 from flask import Flask, render_template, request, jsonify
 from pymongo import MongoClient
 from bson import ObjectId
@@ -16,8 +17,73 @@ from pathlib import Path
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+PROJECT_ID = os.getenv('PROJECT_ID', '')
+PROJECT_LOG_TAG = f"{PROJECT_ID}log" if PROJECT_ID else "projectlog"
+LOG_FORMAT = '%(asctime)s [%(levelname)s] [%(project_tag)s] %(message)s'
+
+
+class ProjectLogFilter(logging.Filter):
+    """Inject project tag into all log records."""
+
+    def filter(self, record):
+        record.project_tag = PROJECT_LOG_TAG
+        return True
+
+
+class InMemoryLogHandler(logging.Handler):
+    """Store recent log lines in memory for retrieval."""
+
+    def __init__(self, max_entries=500):
+        super().__init__()
+        self.buffer = deque(maxlen=max_entries)
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.buffer.append(msg)
+        except Exception:
+            self.handleError(record)
+
+
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+root_logger = logging.getLogger()
+project_filter = ProjectLogFilter()
+root_logger.addFilter(project_filter)
+for handler in root_logger.handlers:
+    handler.addFilter(project_filter)
+
+memory_handler = InMemoryLogHandler()
+memory_handler.setLevel(logging.INFO)
+memory_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+root_logger.addHandler(memory_handler)
+
 logger = logging.getLogger(__name__)
+
+
+def get_recent_logs(project_id=None, limit=200):
+    """Return recent log lines, optionally filtered by project id tag."""
+    target_tag = f"{project_id}log" if project_id else PROJECT_LOG_TAG
+    logs = list(memory_handler.buffer)
+    if target_tag:
+        logs = [line for line in logs if f'[{target_tag}]' in line]
+    if limit and limit > 0:
+        logs = logs[-limit:]
+    return logs
+
+
+def deployment_error_response(message, error=None, status_code=500, project_id=None, extra=None):
+    """Build a standardized deployment error response with debug logs."""
+    payload = {
+        'success': False,
+        'message': message,
+        'debug_logs': get_recent_logs(project_id)
+    }
+    if error is not None:
+        payload['error'] = error
+    if extra:
+        payload.update(extra)
+    return jsonify(payload), status_code
+
 
 app = Flask(__name__)
 
@@ -30,9 +96,6 @@ MONGO_COLLECTION = os.getenv('MONGO_COLLECTION', 'users')
 CLOUDFLARE_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN')
 CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')
 CLOUDFLARE_PROJECT_NAME = os.getenv('CLOUDFLARE_PROJECT_NAME')
-
-# Project ID for GitHub token lookup
-PROJECT_ID = os.getenv('PROJECT_ID', '')
 
 # API timeout configuration (in seconds)
 API_TIMEOUT = 30
@@ -885,6 +948,19 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    """API endpoint to retrieve recent logs, filtered by project id tag."""
+    project_id = request.args.get('project_id') or PROJECT_ID
+    limit = request.args.get('limit', default=200, type=int)
+    logs = get_recent_logs(project_id, limit)
+    return jsonify({
+        'success': True,
+        'project_id': project_id,
+        'logs': logs
+    }), 200
+
+
 @app.route('/api/repos', methods=['GET'])
 def get_repos():
     """
@@ -1112,10 +1188,11 @@ def deploy_by_repo(repo_id):
         temp_dir = download_github_repo(git_token, repo_full_name, default_branch)
         
         if not temp_dir:
-            return jsonify({
-                'success': False,
-                'message': 'Failed to download repository from GitHub'
-            }), 500
+            return deployment_error_response(
+                'Failed to download repository from GitHub',
+                status_code=500,
+                project_id=repo_doc.get('project_id')
+            )
         
         try:
             # Deploy to Cloudflare Pages
@@ -1132,11 +1209,12 @@ def deploy_by_repo(repo_id):
                     'output': result['output']
                 }), 200
             else:
-                return jsonify({
-                    'success': False,
-                    'message': 'Deployment failed',
-                    'error': result['error']
-                }), 500
+                return deployment_error_response(
+                    'Deployment failed',
+                    error=result.get('error'),
+                    status_code=500,
+                    project_id=repo_doc.get('project_id')
+                )
         finally:
             # Clean up temporary directory
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -1144,11 +1222,12 @@ def deploy_by_repo(repo_id):
     
     except Exception as e:
         logger.error(f"Deployment error: {e}")
-        return jsonify({
-            'success': False,
-            'message': 'Deployment failed',
-            'error': str(e)
-        }), 500
+        return deployment_error_response(
+            'Deployment failed',
+            error=str(e),
+            status_code=500,
+            project_id=repo_doc.get('project_id') if 'repo_doc' in locals() else None
+        )
 
 
 @app.route('/api/deploy/<repo_id>/domain', methods=['GET'])
@@ -1261,10 +1340,11 @@ def deploy():
         temp_dir = download_github_repo(github_token, repo_full_name, default_branch)
         
         if not temp_dir:
-            return jsonify({
-                'success': False,
-                'message': 'Failed to download repository from GitHub'
-            }), 500
+            return deployment_error_response(
+                'Failed to download repository from GitHub',
+                status_code=500,
+                project_id=selected_repo.get('project_id')
+            )
         
         try:
             # Deploy to Cloudflare Pages
@@ -1279,11 +1359,12 @@ def deploy():
                     'output': result['output']
                 }), 200
             else:
-                return jsonify({
-                    'success': False,
-                    'message': 'Deployment failed',
-                    'error': result['error']
-                }), 500
+                return deployment_error_response(
+                    'Deployment failed',
+                    error=result.get('error'),
+                    status_code=500,
+                    project_id=selected_repo.get('project_id')
+                )
         finally:
             # Clean up temporary directory
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -1291,11 +1372,12 @@ def deploy():
     
     except Exception as e:
         logger.error(f"Deployment error: {e}")
-        return jsonify({
-            'success': False,
-            'message': 'Deployment failed',
-            'error': str(e)
-        }), 500
+        return deployment_error_response(
+            'Deployment failed',
+            error=str(e),
+            status_code=500,
+            project_id=selected_repo.get('project_id') if 'selected_repo' in locals() else None
+        )
 
 
 @app.route('/api/health', methods=['GET'])
