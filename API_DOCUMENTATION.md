@@ -11,6 +11,7 @@ This document provides detailed information about the deployment API endpoints, 
    - [List User Repositories](#list-user-repositories)
    - [Get Deployment Domain by Repo ID](#get-deployment-domain-by-repo-id)
    - [Health Check](#health-check)
+   - [Get Recent Logs](#get-recent-logs)
 3. [Error Handling](#error-handling)
 4. [Deployment Flow](#deployment-flow)
 
@@ -318,6 +319,46 @@ curl "http://localhost:5000/api/health"
   "instance": "M1"
 }
 ```
+
+---
+
+### Get Recent Logs
+
+**Endpoint:** `GET /api/logs`
+
+Retrieve recent in-memory server logs. Logs are tagged by project and include timestamp/level prefixes.
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `project_id` | string | No | Filters logs by project tag. Defaults to the server `PROJECT_ID` if omitted. |
+| `limit` | integer | No | Number of most recent log lines to return (default 200, max 500). |
+
+#### Request
+
+```bash
+# Default project, last 200 lines
+curl "http://localhost:5000/api/logs"
+
+# Specific project tag with custom limit
+curl "http://localhost:5000/api/logs?project_id=6957a3fb538e5f68b68b58f7&limit=50"
+```
+
+#### Response Format
+
+```json
+{
+  "success": true,
+  "project_id": "6957a3fb538e5f68b68b58f7",
+  "logs": [
+    "2026-01-02 10:56:42,117 [INFO] [6957a3fb538e5f68b68b58f7-log] Deployment successful! Project: tesf",
+    "2026-01-02 10:56:43,501 [INFO] [6957a3fb538e5f68b68b58f7-log] Cleaning up temporary directory: /tmp/github_repo_abcd1234"
+  ]
+}
+```
+
+If the `project_id` is not provided, the response uses the server's configured project tag.
 
 ---
 
