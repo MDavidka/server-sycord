@@ -5,6 +5,7 @@ import tempfile
 import shutil
 import requests
 from collections import deque
+from threading import Lock
 from flask import Flask, render_template, request, jsonify
 from pymongo import MongoClient
 from bson import ObjectId
@@ -16,9 +17,17 @@ from pathlib import Path
 # Load environment variables
 load_dotenv()
 
+
+def build_project_tag(project_id):
+    """Create a consistent project log tag."""
+    return f"{project_id}-log" if project_id else None
+
+
 # Configure logging
 PROJECT_ID = os.getenv('PROJECT_ID', '')
-PROJECT_LOG_TAG = f"{PROJECT_ID}log" if PROJECT_ID else "projectlog"
+DEFAULT_PROJECT_TAG = 'project-log'
+PROJECT_LOG_TAG = build_project_tag(PROJECT_ID) or DEFAULT_PROJECT_TAG
+DEBUG_LOG_LIMIT = 50
 LOG_FORMAT = '%(asctime)s [%(levelname)s] [%(project_tag)s] %(message)s'
 
 
@@ -36,11 +45,14 @@ class InMemoryLogHandler(logging.Handler):
     def __init__(self, max_entries=500):
         super().__init__()
         self.buffer = deque(maxlen=max_entries)
+        self.buffer_lock = Lock()
 
     def emit(self, record):
         try:
+            tag = getattr(record, 'project_tag', None)
             msg = self.format(record)
-            self.buffer.append(msg)
+            with self.buffer_lock:
+                self.buffer.append({'tag': tag, 'message': msg})
         except Exception:
             self.handleError(record)
 
@@ -60,15 +72,25 @@ root_logger.addHandler(memory_handler)
 logger = logging.getLogger(__name__)
 
 
+def clamp_log_limit(limit):
+    """Ensure requested log limit stays within buffer bounds."""
+    max_limit = memory_handler.buffer.maxlen
+    if not limit or limit < 1:
+        return max_limit
+    return min(limit, max_limit)
+
+
 def get_recent_logs(project_id=None, limit=200):
     """Return recent log lines, optionally filtered by project id tag."""
-    target_tag = f"{project_id}log" if project_id else PROJECT_LOG_TAG
-    logs = list(memory_handler.buffer)
+    target_tag = build_project_tag(project_id)
+    safe_limit = clamp_log_limit(limit)
+    with memory_handler.buffer_lock:
+        entries = list(memory_handler.buffer)
     if target_tag:
-        logs = [line for line in logs if f'[{target_tag}]' in line]
-    if limit and limit > 0:
-        logs = logs[-limit:]
-    return logs
+        logs = [entry.get('message') for entry in entries if entry.get('tag') == target_tag]
+    else:
+        logs = [entry.get('message') for entry in entries]
+    return logs[-safe_limit:]
 
 
 def deployment_error_response(message, error=None, status_code=500, project_id=None, extra=None):
@@ -76,7 +98,7 @@ def deployment_error_response(message, error=None, status_code=500, project_id=N
     payload = {
         'success': False,
         'message': message,
-        'debug_logs': get_recent_logs(project_id)
+        'debug_logs': get_recent_logs(project_id, DEBUG_LOG_LIMIT)
     }
     if error is not None:
         payload['error'] = error
@@ -951,9 +973,11 @@ def index():
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
     """API endpoint to retrieve recent logs, filtered by project id tag."""
-    project_id = request.args.get('project_id') or PROJECT_ID
+    project_id = request.args.get('project_id')
+    if not project_id:
+        project_id = PROJECT_ID
     limit = request.args.get('limit', default=200, type=int)
-    logs = get_recent_logs(project_id, limit)
+    logs = get_recent_logs(project_id, clamp_log_limit(limit))
     return jsonify({
         'success': True,
         'project_id': project_id,
@@ -1130,6 +1154,7 @@ def deploy_by_repo(repo_id):
         "error": "Detailed error message"
     }
     """
+    project_id_for_debug = None
     try:
         logger.info(f"Received deployment request for repo_id={repo_id}")
         
@@ -1143,6 +1168,7 @@ def deploy_by_repo(repo_id):
         
         # Get repository details from MongoDB (new structure)
         repo_doc = get_repo_by_id(repo_id)
+        project_id_for_debug = repo_doc.get('project_id') if repo_doc else None
         
         if not repo_doc:
             return jsonify({
@@ -1191,7 +1217,7 @@ def deploy_by_repo(repo_id):
             return deployment_error_response(
                 'Failed to download repository from GitHub',
                 status_code=500,
-                project_id=repo_doc.get('project_id')
+                project_id=project_id_for_debug
             )
         
         try:
@@ -1213,7 +1239,7 @@ def deploy_by_repo(repo_id):
                     'Deployment failed',
                     error=result.get('error'),
                     status_code=500,
-                    project_id=repo_doc.get('project_id')
+                    project_id=project_id_for_debug
                 )
         finally:
             # Clean up temporary directory
@@ -1226,7 +1252,7 @@ def deploy_by_repo(repo_id):
             'Deployment failed',
             error=str(e),
             status_code=500,
-            project_id=repo_doc.get('project_id') if 'repo_doc' in locals() else None
+            project_id=project_id_for_debug
         )
 
 
@@ -1288,6 +1314,7 @@ def get_deployment_domain(repo_id):
 @app.route('/api/deploy', methods=['POST'])
 def deploy():
     """API endpoint to trigger deployment from GitHub repository (legacy support)"""
+    project_id_for_debug = None
     try:
         logger.info("Received deployment request")
         
@@ -1303,6 +1330,7 @@ def deploy():
         
         # Get repository details from MongoDB
         selected_repo = get_repository_document_by_id(repo_id, include_tokens=True)
+        project_id_for_debug = selected_repo.get('project_id') if selected_repo else None
         
         if not selected_repo:
             return jsonify({
@@ -1343,7 +1371,7 @@ def deploy():
             return deployment_error_response(
                 'Failed to download repository from GitHub',
                 status_code=500,
-                project_id=selected_repo.get('project_id')
+                project_id=project_id_for_debug
             )
         
         try:
@@ -1363,7 +1391,7 @@ def deploy():
                     'Deployment failed',
                     error=result.get('error'),
                     status_code=500,
-                    project_id=selected_repo.get('project_id')
+                    project_id=project_id_for_debug
                 )
         finally:
             # Clean up temporary directory
@@ -1376,7 +1404,7 @@ def deploy():
             'Deployment failed',
             error=str(e),
             status_code=500,
-            project_id=selected_repo.get('project_id') if 'selected_repo' in locals() else None
+            project_id=project_id_for_debug
         )
 
 
