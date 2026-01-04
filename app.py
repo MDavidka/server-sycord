@@ -544,7 +544,9 @@ def build_vite_project(directory_path):
         )
         
         if install_result.returncode != 0:
-            logger.error(f"npm install failed: {install_result.stderr}")
+            logger.error("npm install failed")
+            logger.error("STDOUT:\n%s", install_result.stdout)
+            logger.error("STDERR:\n%s", install_result.stderr)
             return {
                 'success': False,
                 'deploy_path': None,
@@ -565,7 +567,9 @@ def build_vite_project(directory_path):
         )
         
         if build_result.returncode != 0:
-            logger.error(f"npm run build failed: {build_result.stderr}")
+            logger.error("npm run build failed")
+            logger.error("STDOUT:\n%s", build_result.stdout)
+            logger.error("STDERR:\n%s", build_result.stderr)
             return {
                 'success': False,
                 'deploy_path': None,
