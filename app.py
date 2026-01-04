@@ -37,6 +37,7 @@ PROJECT_ID = os.getenv('PROJECT_ID', '')
 # API timeout configuration (in seconds)
 API_TIMEOUT = 30
 DOWNLOAD_TIMEOUT = 120
+BUILD_TIMEOUT = 300  # 5 minutes timeout for npm install/build
 
 
 def sanitize_project_name(name):
@@ -539,7 +540,7 @@ def build_vite_project(directory_path):
             cwd=directory_path,
             capture_output=True,
             text=True,
-            timeout=300  # 5 minutes timeout for install
+            timeout=BUILD_TIMEOUT
         )
         
         if install_result.returncode != 0:
@@ -560,7 +561,7 @@ def build_vite_project(directory_path):
             cwd=directory_path,
             capture_output=True,
             text=True,
-            timeout=300  # 5 minutes timeout for build
+            timeout=BUILD_TIMEOUT
         )
         
         if build_result.returncode != 0:
