@@ -268,6 +268,24 @@ curl -X POST http://localhost:5000/api/deploy/12345
 }
 ```
 
+**Response (Error - Build failed):**
+```json
+{
+  "success": false,
+  "message": "Deployment failed",
+  "error": "npm run build failed: ..."
+}
+```
+
+**Response (Error - dist/index.html not found):**
+```json
+{
+  "success": false,
+  "message": "Deployment failed",
+  "error": "Build succeeded but dist/index.html not found. Ensure your Vite project outputs to the dist directory."
+}
+```
+
 ### GET /api/deploy/{repo_id}/domain
 
 Fetch the Cloudflare Pages domain for a deployed repository.
@@ -350,11 +368,29 @@ Visit `http://localhost:5000` in your browser to access the modern dark-themed U
 2. Server retrieves repository config (`git_url`, `git_token`) from MongoDB
 3. Downloads repository from GitHub as a zip archive using `git_token`
 4. Extracts files to a temporary directory
-5. Creates a new Cloudflare Pages project (if needed)
-6. Executes `wrangler pages deploy` command
-7. Uploads files to Cloudflare Pages
-8. Cleans up temporary directory
-9. Returns deployment result with live URL
+5. **Build Step (for Vite/Node.js projects):**
+   - Checks if `package.json` exists in the repository
+   - If found, runs `npm install` to install dependencies
+   - Runs `npm run build` to build the project
+   - Verifies `dist/index.html` exists after the build
+   - Uses the `dist` folder for deployment (standard Vite output)
+6. Creates a new Cloudflare Pages project (if needed)
+7. Executes `wrangler pages deploy` command
+8. Uploads files to Cloudflare Pages
+9. Cleans up temporary directory
+10. Returns deployment result with live URL
+
+### Vite Framework Support
+
+This server automatically detects and builds Vite framework projects:
+
+| Configuration | Value |
+|---------------|-------|
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+| Entry Point | `dist/index.html` |
+
+For static HTML projects (without `package.json`), the entire repository is deployed directly.
 
 ## Troubleshooting
 
@@ -382,6 +418,17 @@ Ensure the user document has a `git_connection` array with repository entries co
 - Verify your `CLOUDFLARE_API_TOKEN` has the correct permissions
 - Check that `CLOUDFLARE_ACCOUNT_ID` is correct
 - Review Wrangler logs in the API response
+
+### Build failed (Vite projects)
+- Ensure your `package.json` has a valid `build` script
+- Check that all dependencies are correctly specified in `package.json`
+- Verify that `npm run build` works locally
+- For Vite projects, ensure the build outputs to the `dist` directory
+
+### dist/index.html not found
+- Verify your Vite configuration outputs to the `dist` directory
+- Check if the `build.outDir` in `vite.config.js` is set to `dist` (default)
+- Ensure the project has an `index.html` entry point
 
 ## License
 
