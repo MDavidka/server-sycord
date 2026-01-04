@@ -326,13 +326,13 @@ curl "http://localhost:5000/api/health"
 
 **Endpoint:** `GET /api/logs`
 
-Retrieve recent in-memory server logs. Logs are tagged by project and include timestamp/level prefixes.
+Retrieve recent in-memory server logs. Logs are tagged by project ID and include timestamp/level prefixes.
 
 #### Query Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `project_id` | string | No | Filters logs by project tag. Defaults to the server `PROJECT_ID` if omitted. |
+| `project_id` | string | No | Filters logs by project ID tag. Defaults to the server `PROJECT_ID` if omitted. |
 | `limit` | integer | No | Number of most recent log lines to return (default 200, max 500). |
 
 #### Request
@@ -352,13 +352,13 @@ curl "http://localhost:5000/api/logs?project_id=6957a3fb538e5f68b68b58f7&limit=5
   "success": true,
   "project_id": "6957a3fb538e5f68b68b58f7",
   "logs": [
-    "2026-01-02 10:56:42,117 [INFO] [6957a3fb538e5f68b68b58f7-log] Deployment successful! Project: test",
-    "2026-01-02 10:56:43,501 [INFO] [6957a3fb538e5f68b68b58f7-log] Cleaning up temporary directory: /tmp/github_repo_abcd1234"
+    "2026-01-02 10:56:42,117 [INFO] [6957a3fb538e5f68b68b58f7] Deployment successful! Project: test",
+    "2026-01-02 10:56:43,501 [INFO] [6957a3fb538e5f68b68b58f7] Cleaning up temporary directory: /tmp/github_repo_abcd1234"
   ]
 }
 ```
 
-If the `project_id` is not provided, the response uses the server's configured project tag.
+If the `project_id` is not provided, the response uses the server's configured project ID tag.
 
 ---
 

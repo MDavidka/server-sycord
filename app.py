@@ -20,7 +20,7 @@ load_dotenv()
 
 def build_project_tag(project_id):
     """Create a consistent project log tag."""
-    return f"{project_id}-log" if project_id else None
+    return str(project_id) if project_id else None
 
 
 # Configure logging
