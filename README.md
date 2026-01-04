@@ -338,6 +338,30 @@ curl http://localhost:5000/api/health
 }
 ```
 
+### GET /api/logs
+
+Retrieve recent server logs stored in memory.
+
+**Query Parameters:**
+- `project_id` (optional): Filter logs by project tag. Defaults to the server `PROJECT_ID`.
+- `limit` (optional): Number of latest lines to return (default 200, max 500).
+
+**Request:**
+```bash
+curl "http://localhost:5000/api/logs?project_id=6957a3fb538e5f68b68b58f7&limit=50"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "project_id": "6957a3fb538e5f68b68b58f7",
+  "logs": [
+    "2026-01-02 10:56:42,117 [INFO] [6957a3fb538e5f68b68b58f7-log] Deployment successful! Project: test"
+  ]
+}
+```
+
 ## Web Interface
 
 Visit `http://localhost:5000` in your browser to access the modern dark-themed UI with:
