@@ -357,7 +357,7 @@ curl "http://localhost:5000/api/logs?project_id=6957a3fb538e5f68b68b58f7&limit=5
   "success": true,
   "project_id": "6957a3fb538e5f68b68b58f7",
   "logs": [
-    "2026-01-02 10:56:42,117 [INFO] [6957a3fb538e5f68b68b58f7-log] Deployment successful! Project: tesf"
+    "2026-01-02 10:56:42,117 [INFO] [6957a3fb538e5f68b68b58f7-log] Deployment successful! Project: test"
   ]
 }
 ```
