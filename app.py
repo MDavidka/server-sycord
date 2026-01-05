@@ -13,9 +13,13 @@ from bson.errors import InvalidId
 from dotenv import load_dotenv
 import logging
 from pathlib import Path
+from contextvars import ContextVar
 
 # Load environment variables
 load_dotenv()
+
+# Context variable for project tag
+current_project_tag = ContextVar('project_tag', default=None)
 
 
 def build_project_tag(project_id):
@@ -35,7 +39,11 @@ class ProjectLogFilter(logging.Filter):
     """Inject project tag into all log records."""
 
     def filter(self, record):
-        record.project_tag = PROJECT_LOG_TAG
+        tag = current_project_tag.get()
+        if tag:
+            record.project_tag = tag
+        else:
+            record.project_tag = PROJECT_LOG_TAG
         return True
 
 
@@ -1207,44 +1215,51 @@ def deploy_by_repo(repo_id):
         # Generate Cloudflare project name from repo name (sanitized)
         cf_project_name = sanitize_project_name(repo_name)
         
-        # Create Cloudflare project if it doesn't exist
-        create_cloudflare_project(cf_project_name)
-        
-        # Download repository from GitHub
-        temp_dir = download_github_repo(git_token, repo_full_name, default_branch)
-        
-        if not temp_dir:
-            return deployment_error_response(
-                'Failed to download repository from GitHub',
-                status_code=500,
-                project_id=project_id_for_debug
-            )
+        # Set context for logging
+        tag = build_project_tag(repo_id)
+        token = current_project_tag.set(tag)
         
         try:
-            # Deploy to Cloudflare Pages
-            result = deploy_to_cloudflare_pages(temp_dir, cf_project_name)
+            # Create Cloudflare project if it doesn't exist
+            create_cloudflare_project(cf_project_name)
             
-            if result['success']:
-                return jsonify({
-                    'success': True,
-                    'message': f'Deployment successful! Project: {cf_project_name}',
-                    'project_name': cf_project_name,
-                    'url': result.get('url'),
-                    'username': username,
-                    'repo_id': repo_id,
-                    'output': result['output']
-                }), 200
-            else:
+            # Download repository from GitHub
+            temp_dir = download_github_repo(git_token, repo_full_name, default_branch)
+
+            if not temp_dir:
                 return deployment_error_response(
-                    'Deployment failed',
-                    error=result.get('error'),
+                    'Failed to download repository from GitHub',
                     status_code=500,
                     project_id=project_id_for_debug
                 )
+
+            try:
+                # Deploy to Cloudflare Pages
+                result = deploy_to_cloudflare_pages(temp_dir, cf_project_name)
+
+                if result['success']:
+                    return jsonify({
+                        'success': True,
+                        'message': f'Deployment successful! Project: {cf_project_name}',
+                        'project_name': cf_project_name,
+                        'url': result.get('url'),
+                        'username': username,
+                        'repo_id': repo_id,
+                        'output': result['output']
+                    }), 200
+                else:
+                    return deployment_error_response(
+                        'Deployment failed',
+                        error=result.get('error'),
+                        status_code=500,
+                        project_id=project_id_for_debug
+                    )
+            finally:
+                # Clean up temporary directory
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                logger.info(f"Cleaned up temporary directory: {temp_dir}")
         finally:
-            # Clean up temporary directory
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            logger.info(f"Cleaned up temporary directory: {temp_dir}")
+            current_project_tag.reset(token)
     
     except Exception as e:
         logger.error(f"Deployment error: {e}")
@@ -1361,42 +1376,49 @@ def deploy():
         # Generate Cloudflare project name from repo name (sanitized)
         cf_project_name = sanitize_project_name(repo_name)
         
-        # Create Cloudflare project if it doesn't exist
-        create_cloudflare_project(cf_project_name)
-        
-        # Download repository from GitHub
-        temp_dir = download_github_repo(github_token, repo_full_name, default_branch)
-        
-        if not temp_dir:
-            return deployment_error_response(
-                'Failed to download repository from GitHub',
-                status_code=500,
-                project_id=project_id_for_debug
-            )
-        
+        # Set context for logging
+        tag = build_project_tag(repo_id)
+        token = current_project_tag.set(tag)
+
         try:
-            # Deploy to Cloudflare Pages
-            result = deploy_to_cloudflare_pages(temp_dir, cf_project_name)
+            # Create Cloudflare project if it doesn't exist
+            create_cloudflare_project(cf_project_name)
             
-            if result['success']:
-                return jsonify({
-                    'success': True,
-                    'message': f'Deployment successful! Project: {cf_project_name}',
-                    'project_name': cf_project_name,
-                    'url': result.get('url'),
-                    'output': result['output']
-                }), 200
-            else:
+            # Download repository from GitHub
+            temp_dir = download_github_repo(github_token, repo_full_name, default_branch)
+
+            if not temp_dir:
                 return deployment_error_response(
-                    'Deployment failed',
-                    error=result.get('error'),
+                    'Failed to download repository from GitHub',
                     status_code=500,
                     project_id=project_id_for_debug
                 )
+
+            try:
+                # Deploy to Cloudflare Pages
+                result = deploy_to_cloudflare_pages(temp_dir, cf_project_name)
+
+                if result['success']:
+                    return jsonify({
+                        'success': True,
+                        'message': f'Deployment successful! Project: {cf_project_name}',
+                        'project_name': cf_project_name,
+                        'url': result.get('url'),
+                        'output': result['output']
+                    }), 200
+                else:
+                    return deployment_error_response(
+                        'Deployment failed',
+                        error=result.get('error'),
+                        status_code=500,
+                        project_id=project_id_for_debug
+                    )
+            finally:
+                # Clean up temporary directory
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                logger.info(f"Cleaned up temporary directory: {temp_dir}")
         finally:
-            # Clean up temporary directory
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            logger.info(f"Cleaned up temporary directory: {temp_dir}")
+            current_project_tag.reset(token)
     
     except Exception as e:
         logger.error(f"Deployment error: {e}")

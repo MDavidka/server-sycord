@@ -680,7 +680,9 @@
                 <p>1. <code>/api/repos</code> (GET): Fetches all repositories from the database.</p>
                 <p>2. <code>/api/repos/{username}</code> (GET): Fetches repositories for a specific user.</p>
                 <p>3. <code>/api/deploy/{repo_id}</code> (GET/POST): Trigger a deployment using repo_id. The server downloads the code from GitHub using git_url and git_token, then deploys to Cloudflare Pages.</p>
-                <p>4. <code>/api/health</code> (GET): Checks if the deployment server is running.</p>
+                <p>4. <code>/api/deploy/{repo_id}/domain</code> (GET): Retrieve the deployment domain for a repository.</p>
+                <p>5. <code>/api/logs</code> (GET): Retrieve recent server logs. Use <code>?project_id={repo_id}</code> to filter logs for a specific deployment.</p>
+                <p>6. <code>/api/health</code> (GET): Checks if the deployment server is running.</p>
             </div>
 
             <div class="endpoint">
@@ -694,6 +696,14 @@
             <div class="endpoint">
                 <span class="endpoint-method get">GET</span>
                 <span class="endpoint-path">/api/repos/{username}</span>
+            </div>
+            <div class="endpoint">
+                <span class="endpoint-method get">GET</span>
+                <span class="endpoint-path">/api/deploy/{repo_id}/domain</span>
+            </div>
+            <div class="endpoint">
+                <span class="endpoint-method get">GET</span>
+                <span class="endpoint-path">/api/logs</span>
             </div>
             <div class="endpoint">
                 <span class="endpoint-method get">GET</span>
