@@ -326,13 +326,13 @@ curl "http://localhost:5000/api/health"
 
 **Endpoint:** `GET /api/logs`
 
-Retrieve recent in-memory server logs. Logs are tagged by project ID and include timestamp/level prefixes.
+Retrieve recent in-memory server logs. Logs are tagged by project ID (which corresponds to `repo_id` during deployment) and include timestamp/level prefixes.
 
 #### Query Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `project_id` | string | No | Filters logs by project ID tag. Defaults to the server `PROJECT_ID` if omitted. |
+| `project_id` | string | No | Filters logs by project ID (or `repo_id`). Defaults to the server `PROJECT_ID` if omitted. Use `repo_id` to get logs for a specific deployment. |
 | `limit` | integer | No | Number of most recent log lines to return (default 200, max 500). |
 
 #### Request
