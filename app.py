@@ -986,8 +986,8 @@ def get_logs():
 
     # Validate project_id parameter
     if project_id:
-        # project_id should be numeric or a valid ObjectId-like string
-        if not re.match(r'^[a-fA-F0-9]+$', project_id):
+        # project_id should be alphanumeric (supports both numeric repo_ids and ObjectId hex strings)
+        if not re.match(r'^[a-zA-Z0-9]+$', project_id):
             logger.error("❌ Log request failed: Invalid project_id format '%s'", project_id)
             return jsonify({
                 'success': False,
@@ -998,16 +998,7 @@ def get_logs():
     else:
         project_id = PROJECT_ID
 
-    # Validate limit parameter
-    if limit < 1:
-        logger.error("❌ Log request failed: Invalid limit value '%d'", limit)
-        return jsonify({
-            'success': False,
-            'message': 'Limit must be a positive integer',
-            'project_id': project_id,
-            'logs': []
-        }), 400
-
+    # Validate limit parameter (clamp_log_limit handles values < 1 by returning max_limit)
     safe_limit = clamp_log_limit(limit)
     logs = get_recent_logs(project_id, safe_limit)
 
