@@ -627,6 +627,10 @@
             color: #f59e0b;
         }
 
+        .log-entry.success {
+            color: #22c55e;
+        }
+
         .console-content::-webkit-scrollbar {
             width: 8px;
         }
@@ -1079,10 +1083,13 @@
                          data.logs.forEach(log => {
                              const line = document.createElement('div');
                              line.className = 'log-entry';
-                             if (log.includes('[ERROR]')) {
+                             // Check for log level markers and icons
+                             if (log.includes('[ERROR]') || log.includes('❌')) {
                                  line.classList.add('error');
                              } else if (log.includes('[WARNING]')) {
                                  line.classList.add('warning');
+                             } else if (log.includes('✅')) {
+                                 line.classList.add('success');
                              }
                              line.textContent = log;
                              consoleContent.appendChild(line);

@@ -982,10 +982,39 @@ def index():
 def get_logs():
     """API endpoint to retrieve recent logs, filtered by project id tag."""
     project_id = request.args.get('project_id')
-    if not project_id:
-        project_id = PROJECT_ID
     limit = request.args.get('limit', default=200, type=int)
-    logs = get_recent_logs(project_id, clamp_log_limit(limit))
+
+    # Validate project_id parameter
+    if project_id:
+        # project_id should be numeric or a valid ObjectId-like string
+        if not re.match(r'^[a-fA-F0-9]+$', project_id):
+            logger.error("❌ Log request failed: Invalid project_id format '%s'", project_id)
+            return jsonify({
+                'success': False,
+                'message': 'Invalid project_id format',
+                'project_id': project_id,
+                'logs': []
+            }), 400
+    else:
+        project_id = PROJECT_ID
+
+    # Validate limit parameter
+    if limit < 1:
+        logger.error("❌ Log request failed: Invalid limit value '%d'", limit)
+        return jsonify({
+            'success': False,
+            'message': 'Limit must be a positive integer',
+            'project_id': project_id,
+            'logs': []
+        }), 400
+
+    safe_limit = clamp_log_limit(limit)
+    logs = get_recent_logs(project_id, safe_limit)
+
+    # Log successful request with icon
+    logger.info("✅ Log request successful: project_id='%s', limit=%d, returned=%d logs",
+                project_id, safe_limit, len(logs))
+
     return jsonify({
         'success': True,
         'project_id': project_id,
