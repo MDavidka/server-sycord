@@ -322,43 +322,77 @@ curl "http://localhost:5000/api/health"
 
 ---
 
-### Get Recent Logs
+### Get Recent Logs (System Console)
 
 **Endpoint:** `GET /api/logs`
 
-Retrieve recent in-memory server logs. Logs are tagged by project ID (which corresponds to `repo_id` during deployment) and include timestamp/level prefixes.
+This endpoint powers the "System Console" in the frontend. It provides access to the server's ephemeral, in-memory logs, which are tagged by project context to allow for real-time deployment monitoring.
+
+#### What to Use
+
+- **Endpoint URL:** `http://localhost:5000/api/logs`
+- **Method:** `GET`
+- **Clients:** Browser (via `fetch`), CLI (via `curl`), or any HTTP client.
 
 #### Query Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `project_id` | string | No | Filters logs by project ID (or `repo_id`). Defaults to the server `PROJECT_ID` if omitted. Use `repo_id` to get logs for a specific deployment. |
-| `limit` | integer | No | Number of most recent log lines to return (default 200, max 500). |
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project_id` | string | No | Server ID | **The Filter Tag.** During a deployment, this should be set to the **`repo_id`** of the repository being deployed. This filters the log stream to show only logs relevant to that specific deployment process. If omitted, it returns logs for the main server instance. |
+| `limit` | integer | No | `200` | **The Buffer Size.** Specifies the number of most recent log lines to retrieve. The maximum allowed value is clamped to the server's buffer size (typically 500). |
 
-#### Request
+#### What Will It Get (Response)
 
-```bash
-# Default project, last 200 lines
-curl "http://localhost:5000/api/logs"
-
-# Specific project tag with custom limit
-curl "http://localhost:5000/api/logs?project_id=6957a3fb538e5f68b68b58f7&limit=50"
-```
-
-#### Response Format
+The API returns a JSON object containing the status, the context tag used, and an array of log strings.
 
 ```json
 {
   "success": true,
-  "project_id": "6957a3fb538e5f68b68b58f7",
+  "project_id": "1126661988",
   "logs": [
-    "2026-01-02 10:56:42,117 [INFO] [6957a3fb538e5f68b68b58f7] Deployment successful! Project: test",
-    "2026-01-02 10:56:43,501 [INFO] [6957a3fb538e5f68b68b58f7] Cleaning up temporary directory: /tmp/github_repo_abcd1234"
+    "2026-01-06 14:44:22,727 [INFO] [1126661988] Starting deployment for repo 1126661988",
+    "2026-01-06 14:44:22,728 [INFO] [1126661988] Created temporary directory: /tmp/github_repo_x82a",
+    "2026-01-06 14:44:25,100 [WARNING] [1126661988] npm warn: deprecated dependency found",
+    "2026-01-06 14:44:40,030 [ERROR] [1126661988] Deployment failed: verify credentials"
   ]
 }
 ```
 
-If the `project_id` is not provided, the response uses the server's configured project ID tag.
+#### What Is What (Fields)
+
+- **`success`** (`boolean`): Indicates if the log retrieval was successful.
+- **`project_id`** (`string`): The tag used to filter these logs.
+    - When you pass `?project_id=12345`, this field will be `12345`.
+    - This confirms you are looking at the specific log stream you requested.
+- **`logs`** (`array of strings`): The actual log lines.
+    - **Format:** `YYYY-MM-DD HH:MM:SS,ms [LEVEL] [TAG] MESSAGE`
+    - **Parsing:** The frontend uses the `[LEVEL]` tag (e.g., `[ERROR]`, `[WARNING]`) to apply CSS coloring (red for errors, yellow for warnings).
+    - **Order:** Oldest to newest (append-only).
+
+#### How It Works Internally
+
+1. **Context Injection:** When a deployment starts (e.g., via `/api/deploy/{repo_id}`), the server sets a thread-local context variable `project_tag` to the `repo_id`.
+2. **Log Filtering:** A custom `logging.Filter` injects this tag into every log record generated during the request.
+3. **In-Memory Storage:** Logs are written to an `InMemoryLogHandler` which stores them in a circular buffer (deque). This is **ephemeral**—restarting the server clears the logs.
+4. **Retrieval:** When you call `/api/logs?project_id={repo_id}`, the server scans this memory buffer and returns only the lines where `[TAG]` matches your `repo_id`.
+
+#### Usage Example: Real-time Monitoring
+
+To monitor a deployment for repository `1126661988`:
+
+1. **Start Deployment:**
+   ```bash
+   curl -X POST http://localhost:5000/api/deploy/1126661988
+   ```
+
+2. **Poll Logs (Loop):**
+   ```bash
+   # Poll every 2 seconds
+   curl "http://localhost:5000/api/logs?project_id=1126661988"
+   ```
+
+3. **Frontend Implementation:**
+   The frontend uses `setInterval` to fetch this endpoint every 2 seconds. It clears the console window and re-renders the `logs` array. Styling is applied based on string content (e.g., `if (log.includes('[ERROR]')) ...`).
 
 ---
 
