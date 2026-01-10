@@ -978,19 +978,25 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/api/logs', methods=['GET'])
+@app.route('/api/logs', methods=['GET', 'OPTIONS'])
 def get_logs():
     """API endpoint to retrieve recent logs, filtered by project id tag."""
-    project_id = request.args.get('project_id')
-    if not project_id:
-        project_id = PROJECT_ID
-    limit = request.args.get('limit', default=200, type=int)
-    logs = get_recent_logs(project_id, clamp_log_limit(limit))
-    return jsonify({
-        'success': True,
-        'project_id': project_id,
-        'logs': logs
-    }), 200
+    if request.method == 'OPTIONS':
+        response = app.make_default_options_response()
+    else:
+        project_id = request.args.get('project_id') or PROJECT_ID
+        limit = request.args.get('limit', default=200, type=int)
+        logs = get_recent_logs(project_id, clamp_log_limit(limit))
+        response = jsonify({
+            'success': True,
+            'project_id': project_id,
+            'logs': logs
+        })
+
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response, response.status_code
 
 
 @app.route('/api/repos', methods=['GET'])
