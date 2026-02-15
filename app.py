@@ -130,6 +130,7 @@ CLOUDFLARE_PROJECT_NAME = os.getenv('CLOUDFLARE_PROJECT_NAME')
 # API timeout configuration (in seconds)
 API_TIMEOUT = 30
 DOWNLOAD_TIMEOUT = 120
+BUILD_TIMEOUT = 300  # 5 minutes timeout for npm install/build
 
 
 def sanitize_project_name(name):
@@ -601,16 +602,152 @@ def create_cloudflare_project(project_name):
         return None
 
 
+def build_vite_project(directory_path):
+    """
+    Build a Vite project by running npm install and npm run build.
+    Returns a dict with success status, deploy_path, and error message.
+
+    For Vite/TypeScript framework projects:
+    - Build command: npm run build
+    - Output directory: dist (This folder contains the production-ready assets)
+    - Note: This intentionally reduces the deployed files to only the build artifacts.
+    """
+    package_json_path = os.path.join(directory_path, 'package.json')
+
+    # Check if package.json exists
+    if not os.path.exists(package_json_path):
+        logger.info("No package.json found, skipping build step")
+        return {
+            'success': True,
+            'deploy_path': directory_path,
+            'built': False,
+            'error': None
+        }
+
+    logger.info(f"Found package.json, building Vite project in {directory_path}")
+
+    try:
+        # Run npm install
+        logger.info("Running npm install...")
+        install_result = subprocess.run(
+            ['npm', 'install'],
+            cwd=directory_path,
+            capture_output=True,
+            text=True,
+            timeout=BUILD_TIMEOUT
+        )
+
+        if install_result.returncode != 0:
+            logger.error("npm install failed")
+            logger.error("STDOUT:\n%s", install_result.stdout)
+            logger.error("STDERR:\n%s", install_result.stderr)
+            return {
+                'success': False,
+                'deploy_path': None,
+                'built': False,
+                'error': f'npm install failed: {install_result.stderr}'
+            }
+
+        logger.info("npm install completed successfully")
+
+        # Run npm run build
+        logger.info("Running npm run build...")
+        build_result = subprocess.run(
+            ['npm', 'run', 'build'],
+            cwd=directory_path,
+            capture_output=True,
+            text=True,
+            timeout=BUILD_TIMEOUT
+        )
+
+        if build_result.returncode != 0:
+            logger.error("npm run build failed")
+            logger.error("STDOUT:\n%s", build_result.stdout)
+            logger.error("STDERR:\n%s", build_result.stderr)
+            return {
+                'success': False,
+                'deploy_path': None,
+                'built': False,
+                'error': f'npm run build failed: {build_result.stderr}'
+            }
+
+        logger.info("npm run build completed successfully")
+
+        # Check if dist/index.html exists
+        dist_path = os.path.join(directory_path, 'dist')
+        dist_index_path = os.path.join(dist_path, 'index.html')
+
+        if not os.path.exists(dist_index_path):
+            logger.error(f"Build succeeded but dist/index.html not found at {dist_index_path}")
+            return {
+                'success': False,
+                'deploy_path': None,
+                'built': True,
+                'error': 'Build succeeded but dist/index.html not found. '
+                         'Ensure your Vite project outputs to the dist directory.'
+            }
+
+        logger.info(f"Build successful, dist/index.html found at {dist_index_path}")
+
+        return {
+            'success': True,
+            'deploy_path': dist_path,
+            'built': True,
+            'error': None
+        }
+
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"Build process timed out: {e}")
+        return {
+            'success': False,
+            'deploy_path': None,
+            'built': False,
+            'error': 'Build process timed out after 5 minutes'
+        }
+    except FileNotFoundError:
+        logger.error("npm command not found")
+        return {
+            'success': False,
+            'deploy_path': None,
+            'built': False,
+            'error': 'npm command not found. Please ensure Node.js is installed.'
+        }
+    except Exception as e:
+        logger.error(f"Build error: {e}")
+        return {
+            'success': False,
+            'deploy_path': None,
+            'built': False,
+            'error': str(e)
+        }
+
+
 def deploy_to_cloudflare_pages(directory_path, project_name):
     """Deploy files to Cloudflare Pages using wrangler.
     
-    This function will deploy the entire directory content to Cloudflare Pages.
+    For Vite framework projects, this function will:
+    1. Check if package.json exists
+    2. Run npm install and npm run build
+    3. Verify dist/index.html exists
+    4. Deploy the dist folder to Cloudflare Pages
     """
     if not CLOUDFLARE_API_TOKEN:
         raise ValueError("CLOUDFLARE_API_TOKEN not set in environment variables")
     
     try:
-        deploy_path = directory_path
+        # Build the project if it's a Vite/Node.js project
+        build_result = build_vite_project(directory_path)
+
+        if not build_result['success']:
+            return {
+                'success': False,
+                'output': None,
+                'url': None,
+                'error': build_result['error']
+            }
+
+        # Use the dist folder if the project was built, otherwise use the original directory
+        deploy_path = build_result['deploy_path']
         logger.info(f"Deploying from: {deploy_path}")
         
         # Set environment variables for wrangler
