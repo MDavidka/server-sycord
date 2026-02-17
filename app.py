@@ -698,7 +698,16 @@ def build_vite_project(directory_path):
                          'Ensure your Vite project outputs to the dist directory.'
             }
         
+        # Log the files to be uploaded to reassure the user
+        file_count = 0
         logger.info(f"Build successful, dist/index.html found at {dist_index_path}")
+        logger.info("Files to be uploaded:")
+        for root, dirs, files in os.walk(dist_path):
+            for file in files:
+                rel_path = os.path.relpath(os.path.join(root, file), dist_path)
+                logger.info(f" - {rel_path}")
+                file_count += 1
+        logger.info(f"Total files to upload: {file_count}")
         
         return {
             'success': True,
