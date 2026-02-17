@@ -698,6 +698,17 @@ def build_vite_project(directory_path):
                          'Ensure your Vite project outputs to the dist directory.'
             }
         
+        # Create _redirects file for SPA support if it doesn't exist
+        # This prevents "white page" issues on non-root routes by directing everything to index.html
+        redirects_path = os.path.join(dist_path, '_redirects')
+        if not os.path.exists(redirects_path):
+            try:
+                with open(redirects_path, 'w') as f:
+                    f.write("/* /index.html 200\n")
+                logger.info("Created _redirects file for SPA routing support")
+            except Exception as e:
+                logger.warning(f"Failed to create _redirects file: {e}")
+
         # Log the files to be uploaded to reassure the user
         file_count = 0
         logger.info(f"Build successful, dist/index.html found at {dist_index_path}")
@@ -707,7 +718,8 @@ def build_vite_project(directory_path):
                 rel_path = os.path.relpath(os.path.join(root, file), dist_path)
                 logger.info(f" - {rel_path}")
                 file_count += 1
-        logger.info(f"Total files to upload: {file_count}")
+        logger.info(f"Total files prepared for upload: {file_count}")
+        logger.info("Note: Cloudflare Pages deduplicates uploads. 'Uploaded' count may be lower if files haven't changed.")
         
         return {
             'success': True,
