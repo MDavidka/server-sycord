@@ -607,9 +607,10 @@ def build_vite_project(directory_path):
     Build a Vite project by running npm install and npm run build.
     Returns a dict with success status, deploy_path, and error message.
     
-    For Vite framework projects:
+    For Vite/TypeScript framework projects:
     - Build command: npm run build
-    - Output directory: dist
+    - Output directory: dist (This folder contains the production-ready assets)
+    - Note: This intentionally reduces the deployed files to only the build artifacts.
     """
     package_json_path = os.path.join(directory_path, 'package.json')
     
@@ -626,11 +627,17 @@ def build_vite_project(directory_path):
     logger.info(f"Found package.json, building Vite project in {directory_path}")
     
     try:
+        # Prepare environment variables
+        # Force NODE_ENV=development for install to ensure devDependencies (like vite) are installed
+        install_env = os.environ.copy()
+        install_env['NODE_ENV'] = 'development'
+
         # Run npm install
         logger.info("Running npm install...")
         install_result = subprocess.run(
             ['npm', 'install'],
             cwd=directory_path,
+            env=install_env,
             capture_output=True,
             text=True,
             timeout=BUILD_TIMEOUT
@@ -650,10 +657,15 @@ def build_vite_project(directory_path):
         logger.info("npm install completed successfully")
         
         # Run npm run build
+        # Force NODE_ENV=production for build to ensure optimized output
+        build_env = os.environ.copy()
+        build_env['NODE_ENV'] = 'production'
+
         logger.info("Running npm run build...")
         build_result = subprocess.run(
             ['npm', 'run', 'build'],
             cwd=directory_path,
+            env=build_env,
             capture_output=True,
             text=True,
             timeout=BUILD_TIMEOUT
@@ -686,7 +698,16 @@ def build_vite_project(directory_path):
                          'Ensure your Vite project outputs to the dist directory.'
             }
         
+        # Log the files to be uploaded to reassure the user
+        file_count = 0
         logger.info(f"Build successful, dist/index.html found at {dist_index_path}")
+        logger.info("Files to be uploaded:")
+        for root, dirs, files in os.walk(dist_path):
+            for file in files:
+                rel_path = os.path.relpath(os.path.join(root, file), dist_path)
+                logger.info(f" - {rel_path}")
+                file_count += 1
+        logger.info(f"Total files to upload: {file_count}")
         
         return {
             'success': True,
