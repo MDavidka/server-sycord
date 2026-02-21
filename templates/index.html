@@ -880,15 +880,17 @@
                 const response = await fetch('/api/repos');
                 const data = await response.json();
                 
-                if (data.success && data.repositories && data.repositories.length > 0) {
+                if (data.success && Array.isArray(data.repositories) && data.repositories.length > 0) {
                     repoCount.textContent = `${data.repositories.length} repos`;
                     // Clear existing content
                     repoList.innerHTML = '';
                     
                     // Use DOM manipulation for safe rendering
                     data.repositories.forEach(repo => {
-                        const repoItem = createRepoItem(repo);
-                        repoList.appendChild(repoItem);
+                        if (repo) {
+                            const repoItem = createRepoItem(repo);
+                            repoList.appendChild(repoItem);
+                        }
                     });
                 } else {
                     repoCount.textContent = '0 repos';
@@ -1059,7 +1061,7 @@
                  const response = await fetch(url);
                  const data = await response.json();
 
-                 if (data.success && data.logs) {
+                 if (data.success && Array.isArray(data.logs)) {
                      // We only want to update if there are logs.
                      // Simple approach: clear and redraw.
                      // Optimization: In a real app, we'd diff or only append new logs.
@@ -1077,6 +1079,7 @@
                          consoleContent.appendChild(line);
                      } else {
                          data.logs.forEach(log => {
+                             if (!log) return;
                              const line = document.createElement('div');
                              line.className = 'log-entry';
                              if (log.includes('[ERROR]')) {
