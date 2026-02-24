@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import shutil
 import requests
+import json
 from collections import deque
 from threading import Lock
 from flask import Flask, render_template, request, jsonify
@@ -602,6 +603,46 @@ def create_cloudflare_project(project_name):
         return None
 
 
+def fix_commonjs_config_files(directory_path):
+    """
+    Check for CommonJS config files in an ESM project and rename them to .cjs.
+    This fixes issues where 'type': 'module' in package.json conflicts with
+    module.exports in postcss.config.js or tailwind.config.js.
+    """
+    package_json_path = os.path.join(directory_path, 'package.json')
+    if not os.path.exists(package_json_path):
+        return
+
+    try:
+        with open(package_json_path, 'r') as f:
+            package_data = json.load(f)
+
+        # Only proceed if the project is ESM
+        if package_data.get('type') != 'module':
+            return
+
+        # List of config files to check
+        config_files = ['postcss.config.js', 'tailwind.config.js']
+
+        for config_file in config_files:
+            file_path = os.path.join(directory_path, config_file)
+            if os.path.exists(file_path):
+                # Check if the file uses CommonJS syntax (module.exports)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+
+                    if 'module.exports' in content:
+                        new_path = os.path.join(directory_path, config_file.replace('.js', '.cjs'))
+                        os.rename(file_path, new_path)
+                        logger.info(f"Renamed {config_file} to .cjs to fix ESM/CommonJS conflict")
+                except Exception as e:
+                    logger.warning(f"Failed to check/rename {config_file}: {e}")
+
+    except Exception as e:
+        logger.warning(f"Error checking package.json for ESM configuration: {e}")
+
+
 def build_vite_project(directory_path):
     """
     Build a Vite project by running npm install and npm run build.
@@ -626,6 +667,9 @@ def build_vite_project(directory_path):
     
     logger.info(f"Found package.json, building Vite project in {directory_path}")
     
+    # Fix potential ESM/CommonJS conflicts before installing/building
+    fix_commonjs_config_files(directory_path)
+
     try:
         # Prepare environment variables
         # Force NODE_ENV=development for install to ensure devDependencies (like vite) are installed
