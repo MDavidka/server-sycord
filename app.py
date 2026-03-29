@@ -1576,24 +1576,53 @@ def deploy_by_repo(repo_id):
                 # Build and deploy to sycord server
                 result = deploy_to_sycord(temp_dir, project_name)
 
-                if result['success']:
-                    return jsonify({
-                        'success': True,
-                        'message': f'Deployment successful! Project: {project_name}',
-                        'project_name': project_name,
-                        'url': result.get('url'),
-                        'local_url': result.get('local_url'),
-                        'username': username,
-                        'repo_id': repo_id,
-                        'output': result['output']
-                    }), 200
-                else:
+                if not result['success']:
                     return deployment_error_response(
                         'Deployment failed',
                         error=result.get('error'),
                         status_code=500,
                         project_id=project_id_for_debug
                     )
+
+                # Create Cloudflare DNS CNAME record (required step)
+                if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ZONE_ID:
+                    logger.error(
+                        "Cloudflare DNS not configured: "
+                        "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID must be set"
+                    )
+                    return deployment_error_response(
+                        'Cloudflare DNS setup failed: CLOUDFLARE_API_TOKEN and '
+                        'CLOUDFLARE_ZONE_ID environment variables are required to '
+                        f'create the {project_name}.{CLOUDFLARE_DOMAIN} subdomain.',
+                        status_code=500,
+                        project_id=project_id_for_debug
+                    )
+
+                dns_result = create_cloudflare_dns_record(project_name, SERVER_HOST)
+                if not dns_result:
+                    logger.error(
+                        f"Cloudflare DNS record creation failed for "
+                        f"{project_name}.{CLOUDFLARE_DOMAIN}"
+                    )
+                    return deployment_error_response(
+                        f'Files deployed but Cloudflare DNS record creation failed '
+                        f'for {project_name}.{CLOUDFLARE_DOMAIN}. '
+                        'Check CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID.',
+                        status_code=500,
+                        project_id=project_id_for_debug
+                    )
+
+                return jsonify({
+                    'success': True,
+                    'message': f'Deployment successful! Project: {project_name}',
+                    'project_name': project_name,
+                    'url': dns_result.get('url') if dns_result.get('url') is not None else result.get('url'),
+                    'local_url': result.get('local_url'),
+                    'username': username,
+                    'repo_id': repo_id,
+                    'output': result['output'],
+                    'dns_record_created': True
+                }), 200
             finally:
                 # Clean up temporary directory
                 shutil.rmtree(temp_dir, ignore_errors=True)
