@@ -574,14 +574,13 @@
 
     let selectedRepo = null;
     let autoScroll = true;
-    let previousLogCount = 0;
     let deploying = false;
 
     function relativeTime(dateStr) {
       if (!dateStr) return '';
-      const now = Date.now();
       const then = new Date(dateStr).getTime();
-      const diff = Math.max(0, Math.floor((now - then) / 1000));
+      if (isNaN(then)) return '';
+      const diff = Math.max(0, Math.floor((Date.now() - then) / 1000));
       if (diff < 60) return diff + 's ago';
       if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
       if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
@@ -723,8 +722,9 @@
         const data = await res.json();
         if (!data.success) return;
         const logs = data.logs || [];
-        if (logs.length === previousLogCount) return;
-        previousLogCount = logs.length;
+        const logsKey = logs.join('\n');
+        if (logsKey === window._prevLogsKey) return;
+        window._prevLogsKey = logsKey;
         renderLogs(logs);
       } catch {}
     }
@@ -796,6 +796,7 @@
     }
 
     function escapeHtml(str) {
+      if (str == null) return '';
       const d = document.createElement('div');
       d.textContent = str;
       return d.innerHTML;
