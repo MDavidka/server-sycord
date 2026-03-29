@@ -129,7 +129,7 @@ CLOUDFLARE_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN')
 CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')
 CLOUDFLARE_PROJECT_NAME = os.getenv('CLOUDFLARE_PROJECT_NAME')
 CLOUDFLARE_ZONE_ID = os.getenv('CLOUDFLARE_ZONE_ID')
-CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'sycord.com')
+CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'micro1.sycord.com')
 
 # API timeout configuration (in seconds)
 API_TIMEOUT = 30
@@ -1261,6 +1261,29 @@ def deploy_to_cloudflare(directory_path):
 def index():
     """Render the main deployment dashboard"""
     return render_template('index.html')
+
+
+@app.before_request
+def route_subdomain():
+    """Route requests from a custom subdomain to the deployed site."""
+    host = request.headers.get('Host', '')
+    # Check if this is a request to a deployed site subdomain
+    # The format should be <project_name>.<CLOUDFLARE_DOMAIN>
+    if host and CLOUDFLARE_DOMAIN in host:
+        # Avoid routing if it's the exact main domain or the server host itself
+        if host != CLOUDFLARE_DOMAIN and host != SERVER_HOST and not host.startswith('www.'):
+            # Extract project name from subdomain
+            # E.g., project-name.micro1.sycord.com -> project-name
+            project_name = host.split(f".{CLOUDFLARE_DOMAIN}")[0]
+
+            # If the project name exists in deployments, serve it
+            site_dir = os.path.join(DEPLOYMENTS_DIR, sanitize_project_name(project_name))
+            if os.path.exists(site_dir):
+                # We need to serve the site. Since we are in before_request,
+                # we can return the response directly, bypassing the normal routing.
+                path = request.path.lstrip('/')
+                response = serve_site(project_name, path if path else 'index.html')
+                return response
 
 
 @app.route('/sites/<project_name>/')
