@@ -21,15 +21,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (LTS version 20) and Wrangler
+# Install Node.js (LTS version 20) – required for npm install and npm run build
 # We use the NodeSource setup script to get the latest Node.js 20.x
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
-    && npm install -g wrangler \
     && npm cache clean --force
 
 # Verify installations
-RUN node --version && npm --version && wrangler --version
+RUN node --version && npm --version
 
 # Install Python dependencies
 COPY requirements.txt .

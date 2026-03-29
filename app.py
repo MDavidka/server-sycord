@@ -127,10 +127,8 @@ MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
 MONGO_DB = os.getenv('MONGO_DB', 'main')
 MONGO_COLLECTION = os.getenv('MONGO_COLLECTION', 'users')
 
-# Cloudflare configuration
+# Cloudflare DNS configuration (used only for creating subdomain CNAME records)
 CLOUDFLARE_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN')
-CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')
-CLOUDFLARE_PROJECT_NAME = os.getenv('CLOUDFLARE_PROJECT_NAME')
 CLOUDFLARE_ZONE_ID = os.getenv('CLOUDFLARE_ZONE_ID')
 CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'micro1.sycord.com')
 
@@ -151,7 +149,7 @@ def sanitize_project_name(name):
         return 'unnamed-project'
     # Replace any non-alphanumeric characters (except hyphens) with hyphens
     sanitized = re.sub(r'[^a-zA-Z0-9-]', '-', name.lower())
-    # Cloudflare project names have a max length of 63 characters
+    # Subdomain labels have a max length of 63 characters
     return sanitized[:63]
 
 
@@ -572,48 +570,6 @@ def download_github_repo(github_token, repo_full_name, branch='main'):
         return None
 
 
-def create_cloudflare_project(project_name):
-    """Create a new Cloudflare Pages project"""
-    if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ACCOUNT_ID:
-        logger.error("Cloudflare credentials not configured")
-        return None
-    
-    try:
-        headers = {
-            'Authorization': f'Bearer {CLOUDFLARE_API_TOKEN}',
-            'Content-Type': 'application/json'
-        }
-        
-        # Create project using Cloudflare API
-        url = f'https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/pages/projects'
-        
-        payload = {
-            'name': project_name,
-            'production_branch': 'main'
-        }
-        
-        response = requests.post(url, headers=headers, json=payload, timeout=API_TIMEOUT)
-        
-        if response.status_code in [200, 201]:
-            result = response.json()
-            if result.get('success'):
-                logger.info(f"Created Cloudflare project: {project_name}")
-                return result.get('result')
-            else:
-                logger.error(f"Cloudflare API error: {result.get('errors')}")
-                return None
-        elif response.status_code == 409:
-            # Project already exists
-            logger.info(f"Cloudflare project already exists: {project_name}")
-            return {'name': project_name}
-        else:
-            logger.error(f"Cloudflare API error: {response.status_code} - {response.text}")
-            return None
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error creating Cloudflare project: {e}")
-        return None
-
-
 def create_cloudflare_dns_record(project_name, pages_domain):
     """Create or update a Cloudflare DNS CNAME record pointing to a Cloudflare Pages domain.
 
@@ -687,57 +643,6 @@ def create_cloudflare_dns_record(project_name, pages_domain):
             return None
     except requests.exceptions.RequestException as e:
         logger.error(f"Error creating Cloudflare DNS record: {e}")
-        return None
-
-
-def add_custom_domain_to_pages(project_name, custom_domain):
-    """Register a custom domain on a Cloudflare Pages project.
-
-    This tells Cloudflare Pages to serve the project at the given custom domain
-    (in addition to the default *.pages.dev URL).
-    Returns the API result dict on success, or None on failure.
-    """
-    if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ACCOUNT_ID:
-        logger.error("Cloudflare credentials not configured for custom domain attachment")
-        return None
-
-    headers = {
-        'Authorization': f'Bearer {CLOUDFLARE_API_TOKEN}',
-        'Content-Type': 'application/json'
-    }
-    url = (
-        f'https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}'
-        f'/pages/projects/{project_name}/domains'
-    )
-
-    try:
-        response = requests.post(
-            url,
-            headers=headers,
-            json={'name': custom_domain},
-            timeout=API_TIMEOUT
-        )
-
-        if response.status_code in [200, 201]:
-            result = response.json()
-            if result.get('success'):
-                logger.info(f"Added custom domain '{custom_domain}' to Pages project '{project_name}'")
-                return result.get('result')
-            else:
-                errors = result.get('errors', [])
-                # Code 7003 means the domain is already attached
-                if any(e.get('code') == 7003 for e in errors):
-                    logger.info(f"Custom domain '{custom_domain}' already attached to '{project_name}'")
-                    return {'name': custom_domain}
-                logger.error(f"Cloudflare Pages domain API error: {errors}")
-                return None
-        else:
-            logger.error(
-                f"Cloudflare Pages domain API error: {response.status_code} - {response.text}"
-            )
-            return None
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error adding custom domain to Pages project: {e}")
         return None
 
 
@@ -936,111 +841,6 @@ def build_vite_project(directory_path):
         }
 
 
-def deploy_to_cloudflare_pages(directory_path, project_name):
-    """Deploy files to Cloudflare Pages using wrangler.
-    
-    For Vite framework projects, this function will:
-    1. Check if package.json exists
-    2. Run npm install and npm run build
-    3. Verify dist/index.html exists
-    4. Deploy the dist folder to Cloudflare Pages
-    """
-    if not CLOUDFLARE_API_TOKEN:
-        raise ValueError("CLOUDFLARE_API_TOKEN not set in environment variables")
-    
-    try:
-        # Build the project if it's a Vite/Node.js project
-        build_result = build_vite_project(directory_path)
-        
-        if not build_result['success']:
-            return {
-                'success': False,
-                'output': None,
-                'url': None,
-                'error': build_result['error']
-            }
-        
-        # Use the dist folder if the project was built, otherwise use the original directory
-        deploy_path = build_result['deploy_path']
-        logger.info(f"Deploying from: {deploy_path}")
-        
-        # Set environment variables for wrangler
-        env = os.environ.copy()
-        env['CLOUDFLARE_API_TOKEN'] = CLOUDFLARE_API_TOKEN
-        if CLOUDFLARE_ACCOUNT_ID:
-            env['CLOUDFLARE_ACCOUNT_ID'] = CLOUDFLARE_ACCOUNT_ID
-        
-        # Run wrangler pages deploy command
-        cmd = [
-            'wrangler',
-            'pages',
-            'deploy',
-            deploy_path,
-            '--project-name',
-            project_name,
-            '--branch',
-            'main'
-        ]
-        
-        logger.info(f"Running command: {' '.join(cmd)}")
-        
-        result = subprocess.run(
-            cmd,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 minutes timeout
-        )
-        
-        if result.returncode == 0:
-            logger.info("Deployment successful")
-            logger.info(result.stdout)
-
-            # Extract URL from stdout
-            # Wrangler output typically contains: "Take a peek over at https://<project>.pages.dev"
-            # or just the URL at the end.
-            url = None
-            # Search for https://*.pages.dev
-            url_match = re.search(r'https://[a-zA-Z0-9-]+\.pages\.dev', result.stdout)
-            if url_match:
-                url = url_match.group(0)
-
-            return {
-                'success': True,
-                'output': result.stdout,
-                'url': url,
-                'error': None
-            }
-        else:
-            logger.error(f"Deployment failed: {result.stderr}")
-            return {
-                'success': False,
-                'output': result.stdout,
-                'error': result.stderr
-            }
-    except subprocess.TimeoutExpired:
-        logger.error("Deployment timed out")
-        return {
-            'success': False,
-            'output': None,
-            'error': 'Deployment timed out after 5 minutes'
-        }
-    except FileNotFoundError:
-        logger.error("wrangler command not found")
-        return {
-            'success': False,
-            'output': None,
-            'error': 'wrangler CLI not found. Please install it: npm install -g wrangler'
-        }
-    except Exception as e:
-        logger.error(f"Deployment error: {e}")
-        return {
-            'success': False,
-            'output': None,
-            'error': str(e)
-        }
-
-
 def deploy_to_sycord(directory_path, project_name):
     """Deploy files to the local Sycord server.
 
@@ -1110,152 +910,6 @@ def deploy_to_sycord(directory_path, project_name):
             'success': False,
             'output': None,
             'url': None,
-            'error': str(e)
-        }
-
-
-def retrieve_files_from_mongo():
-    """Retrieve files from MongoDB"""
-    try:
-        client = get_mongo_client()
-        db = client[MONGO_DB]
-        collection = db[MONGO_COLLECTION]
-        
-        files = list(collection.find({}))
-        logger.info(f"Retrieved {len(files)} files from MongoDB")
-        
-        return files
-    except Exception as e:
-        logger.error(f"Error retrieving files from MongoDB: {e}")
-        raise
-    finally:
-        if 'client' in locals():
-            client.close()
-
-
-def save_files_to_temp_directory(files):
-    """Save MongoDB files to a temporary directory"""
-    temp_dir = tempfile.mkdtemp(prefix='cloudflare_deploy_')
-    logger.info(f"Created temporary directory: {temp_dir}")
-    
-    try:
-        for file_doc in files:
-            # Assume files have 'filename' and 'content' fields
-            raw_filename = file_doc.get('filename', 'index.html')
-            content = file_doc.get('content', '')
-            
-            # Sanitize filename to prevent path traversal
-            filename = sanitize_filename(raw_filename)
-            
-            file_path = os.path.join(temp_dir, filename)
-            
-            # Ensure the resolved path is still within temp_dir
-            real_path = os.path.realpath(file_path)
-            real_temp_dir = os.path.realpath(temp_dir)
-            if not real_path.startswith(real_temp_dir):
-                logger.warning(f"Rejected file path outside temp directory: {raw_filename}")
-                continue
-            
-            # Create subdirectories if needed
-            dir_path = os.path.dirname(file_path)
-            if dir_path and dir_path != temp_dir:
-                # Verify directory path is still within temp_dir
-                real_dir_path = os.path.realpath(dir_path)
-                if not real_dir_path.startswith(real_temp_dir):
-                    logger.warning(f"Rejected directory path outside temp directory: {raw_filename}")
-                    continue
-                os.makedirs(dir_path, exist_ok=True)
-            
-            # Write content to file with error handling
-            try:
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
-                logger.info(f"Saved file: {filename}")
-            except UnicodeEncodeError as e:
-                # Content from MongoDB contains characters that cannot be encoded to UTF-8
-                logger.error(f"UTF-8 encoding error for file {filename}: {e}")
-                logger.warning(f"Skipping file {filename} due to encoding issues")
-                continue
-            except Exception as e:
-                logger.error(f"Failed to write file {filename}: {e}")
-                continue
-        
-        return temp_dir
-    except Exception as e:
-        # Clean up temp directory on error
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        raise
-
-
-def deploy_to_cloudflare(directory_path):
-    """Deploy files to Cloudflare Pages using wrangler"""
-    if not CLOUDFLARE_API_TOKEN:
-        raise ValueError("CLOUDFLARE_API_TOKEN not set in environment variables")
-    
-    if not CLOUDFLARE_PROJECT_NAME:
-        raise ValueError("CLOUDFLARE_PROJECT_NAME not set in environment variables")
-    
-    try:
-        # Set environment variables for wrangler
-        env = os.environ.copy()
-        env['CLOUDFLARE_API_TOKEN'] = CLOUDFLARE_API_TOKEN
-        if CLOUDFLARE_ACCOUNT_ID:
-            env['CLOUDFLARE_ACCOUNT_ID'] = CLOUDFLARE_ACCOUNT_ID
-        
-        # Run wrangler pages deploy command
-        cmd = [
-            'wrangler',
-            'pages',
-            'deploy',
-            directory_path,
-            '--project-name',
-            CLOUDFLARE_PROJECT_NAME
-        ]
-        
-        logger.info(f"Running command: {' '.join(cmd)}")
-        
-        result = subprocess.run(
-            cmd,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 minutes timeout
-        )
-        
-        if result.returncode == 0:
-            logger.info("Deployment successful")
-            logger.info(result.stdout)
-            return {
-                'success': True,
-                'output': result.stdout,
-                'error': None
-            }
-        else:
-            logger.error(f"Deployment failed: {result.stderr}")
-            return {
-                'success': False,
-                'output': result.stdout,
-                'error': result.stderr
-            }
-    except subprocess.TimeoutExpired:
-        logger.error("Deployment timed out")
-        return {
-            'success': False,
-            'output': None,
-            'error': 'Deployment timed out after 5 minutes'
-        }
-    except FileNotFoundError:
-        logger.error("wrangler command not found")
-        return {
-            'success': False,
-            'output': None,
-            'error': 'wrangler CLI not found. Please install it: npm install -g wrangler'
-        }
-    except Exception as e:
-        logger.error(f"Deployment error: {e}")
-        return {
-            'success': False,
-            'output': None,
             'error': str(e)
         }
 
