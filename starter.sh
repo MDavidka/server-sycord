@@ -3,7 +3,6 @@
 # ============================================
 # Sycord M1 Instance - Auto Deploy Starter
 # This script sets up and runs the deployment server
-# with automatic Wrangler installation
 # ============================================
 
 set -euo pipefail
@@ -152,32 +151,7 @@ else
     exit 1
 fi
 
-# Step 4: Install Wrangler CLI
-print_status "Checking Wrangler CLI installation..."
-if command -v wrangler &> /dev/null; then
-    print_success "Wrangler found: $(wrangler --version 2>&1 | head -1)"
-else
-    print_status "Installing Wrangler CLI globally..."
-    if npm install -g wrangler; then
-        print_success "Wrangler installed: $(wrangler --version 2>&1 | head -1)"
-    else
-        print_warning "Global installation failed. Attempting to install with local prefix..."
-
-        # Configure local prefix
-        export NPM_CONFIG_PREFIX="$(pwd)/.npm-global"
-        export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"
-        mkdir -p "$NPM_CONFIG_PREFIX"
-
-        if npm install -g wrangler; then
-             print_success "Wrangler installed locally: $(wrangler --version 2>&1 | head -1)"
-        else
-             print_error "Failed to install Wrangler. Please install manually."
-             exit 1
-        fi
-    fi
-fi
-
-# Step 5: Create virtual environment if not exists
+# Step 4: Create virtual environment if not exists
 print_status "Setting up Python virtual environment..."
 if [ ! -d "venv" ]; then
     $PYTHON_CMD -m venv venv
@@ -186,7 +160,7 @@ else
     print_status "Virtual environment already exists"
 fi
 
-# Step 6: Activate virtual environment and install dependencies
+# Step 5: Activate virtual environment and install dependencies
 print_status "Installing Python dependencies..."
 source venv/bin/activate
 
@@ -202,7 +176,7 @@ fi
 
 print_success "Python dependencies installed"
 
-# Step 7: Check for .env file
+# Step 6: Check for .env file
 print_status "Checking environment configuration..."
 if [ ! -f ".env" ]; then
     if [ -f ".env.example" ]; then
@@ -212,11 +186,10 @@ if [ ! -f ".env" ]; then
         echo ""
         echo "Required configuration:"
         echo "  - MONGO_URI: MongoDB connection string"
-        echo "  - MONGO_DB: Database name (default: test)"
-        echo "  - MONGO_COLLECTION: Collection name (default: github_tokens)"
-        echo "  - PROJECT_ID: MongoDB ObjectId for GitHub token lookup"
-        echo "  - CLOUDFLARE_API_TOKEN: Cloudflare API token"
-        echo "  - CLOUDFLARE_ACCOUNT_ID: Cloudflare account ID"
+        echo "  - MONGO_DB: Database name (default: main)"
+        echo "  - MONGO_COLLECTION: Collection name (default: users)"
+        echo "  - CLOUDFLARE_API_TOKEN: Cloudflare API token (optional, for DNS record creation)"
+        echo "  - CLOUDFLARE_ZONE_ID: Cloudflare zone ID (optional, for DNS record creation)"
         echo ""
     else
         print_error ".env file not found and .env.example is missing."
@@ -228,19 +201,17 @@ fi
 
 # Check for default values in .env
 if grep -q "your_cloudflare_api_token" .env || \
-   grep -q "your_cloudflare_account_id" .env || \
    grep -q "mongodb+srv://user:password@cluster.mongodb.net/?appName=Cluster" .env; then
 
     print_error "Default configuration values detected in .env!"
     echo "The application cannot run with the placeholder values."
     echo "Please edit the .env file with your actual credentials."
-    echo "  - CLOUDFLARE_API_TOKEN"
-    echo "  - CLOUDFLARE_ACCOUNT_ID"
+    echo "  - CLOUDFLARE_API_TOKEN (if DNS record creation is needed)"
     echo "  - MONGO_URI"
     exit 1
 fi
 
-# Step 8: Start the server
+# Step 7: Start the server
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║                   Starting M1 Instance                      ║"
