@@ -139,6 +139,16 @@ For production, use Gunicorn:
 gunicorn -w 4 -b 0.0.0.0:5000 app:app
 ```
 
+### Using with Nginx as a Reverse Proxy
+
+To route custom subdomains (e.g. `project.micro1.sycord.com`) seamlessly to your deployed projects, you should configure Nginx as a reverse proxy.
+
+1. Install Nginx.
+2. Link the provided `nginx.conf` to your Nginx sites configuration (e.g., `/etc/nginx/sites-available/sycord` and `/etc/nginx/sites-enabled/sycord`).
+3. Reload Nginx (`sudo systemctl reload nginx`).
+
+The `nginx.conf` ensures that the `Host`, `X-Real-IP`, `X-Forwarded-For`, and `X-Forwarded-Proto` headers are correctly passed to the Flask application.
+
 ## API Endpoints
 
 ### GET /api/repos
