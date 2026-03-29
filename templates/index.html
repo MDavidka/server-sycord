@@ -3,843 +3,655 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sycord · Deployment Server</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <title>internal server</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg: #09090b;
-      --card-bg: #18181b;
-      --card-border: #27272a;
-      --primary: #6366f1;
-      --primary-hover: #818cf8;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --error: #ef4444;
-      --text: #fafafa;
-      --text-secondary: #a1a1aa;
-      --text-muted: #71717a;
-      --radius: 12px;
-      --radius-sm: 8px;
-    }
-
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+      background: #0a0a0a;
+      color: #ffffff;
       min-height: 100vh;
-      line-height: 1.5;
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
-    /* NAV */
-    nav {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
-      height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 24px;
-      background: rgba(9,9,11,.72);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--card-border);
-    }
-    .nav-brand {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-    .nav-brand span { font-size: 20px; }
-    .nav-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      background: rgba(39,39,42,.6);
-      padding: 6px 12px;
-      border-radius: 20px;
-      border: 1px solid var(--card-border);
-    }
-    .pulse-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--success);
-      position: relative;
-    }
-    .pulse-dot::after {
-      content: '';
-      position: absolute;
-      inset: -3px;
-      border-radius: 50%;
-      background: var(--success);
-      opacity: 0;
-      animation: pulse 2s ease-out infinite;
-    }
-    .pulse-dot.offline { background: var(--error); }
-    .pulse-dot.offline::after { background: var(--error); }
-
-    @keyframes pulse {
-      0% { opacity: .6; transform: scale(1); }
-      100% { opacity: 0; transform: scale(2.2); }
-    }
-
-    /* CONTAINER */
-    .container {
-      max-width: 1280px;
+    .app {
+      max-width: 480px;
       margin: 0 auto;
-      padding: 72px 24px 24px;
+      padding: 48px 24px 40px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
     }
 
-    /* STATS ROW */
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin-bottom: 24px;
+    /* HEADER */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 40px;
     }
-    .stat-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius);
-      padding: 20px;
-      transition: transform .2s, box-shadow .2s;
+
+    .logo-wrap {
+      flex-shrink: 0;
+      width: 52px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .stat-card:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 24px rgba(0,0,0,.3);
+
+    .header h1 {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      color: #ffffff;
     }
-    .stat-label {
+
+    /* STATUS PILLS ROW */
+    .pills {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 34px;
+    }
+
+    .pill {
+      flex: 1;
+      background: #1c1c1e;
+      border-radius: 100px;
+      padding: 10px 12px;
       font-size: 12px;
       font-weight: 500;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      margin-bottom: 8px;
-    }
-    .stat-value {
-      font-size: 28px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .stat-value .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .stat-value .dot.green { background: var(--success); }
-    .stat-value .dot.red { background: var(--error); }
-    .stat-host {
-      font-size: 14px;
-      font-weight: 500;
-      word-break: break-all;
+      color: #8e8e93;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: color .3s;
+      min-width: 0;
     }
 
-    /* CONTENT GRID */
-    .content-grid {
-      display: grid;
-      grid-template-columns: 1.5fr 1fr;
-      gap: 24px;
+    .pill.online { color: #30d158; }
+    .pill.offline { color: #ff453a; }
+
+    /* SECTION LABEL */
+    .section-label {
+      font-size: 15px;
+      font-weight: 500;
+      color: #8e8e93;
+      margin-bottom: 10px;
+      letter-spacing: -0.01em;
     }
-    .left-column, .right-column { display: flex; flex-direction: column; gap: 24px; }
 
     /* CARDS */
     .card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius);
+      background: #1c1c1e;
+      border-radius: 20px;
       overflow: hidden;
-      transition: transform .2s, box-shadow .2s;
+      margin-bottom: 14px;
     }
-    .card:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 24px rgba(0,0,0,.3);
-    }
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--card-border);
-    }
-    .card-header h2 {
-      font-size: 15px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 22px;
-      height: 22px;
-      padding: 0 7px;
-      font-size: 11px;
-      font-weight: 600;
-      border-radius: 11px;
-      background: rgba(99,102,241,.15);
-      color: var(--primary-hover);
-    }
-    .card-body { padding: 16px 20px; }
 
-    /* SEARCH */
-    .search-input {
-      width: 100%;
-      padding: 10px 14px;
-      background: var(--bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-sm);
-      color: var(--text);
-      font-family: inherit;
-      font-size: 13px;
-      outline: none;
-      transition: border-color .2s;
-      margin-bottom: 12px;
+    .card-inner {
+      padding: 18px 18px 16px;
     }
-    .search-input::placeholder { color: var(--text-muted); }
-    .search-input:focus { border-color: var(--primary); }
 
     /* REPO LIST */
+    .search-input {
+      width: 100%;
+      background: #2c2c2e;
+      border: none;
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 14px;
+      color: #ffffff;
+      outline: none;
+      margin-bottom: 12px;
+    }
+
+    .search-input::placeholder { color: #636366; }
+
     .repo-list {
-      max-height: 300px;
+      max-height: 220px;
       overflow-y: auto;
       scrollbar-width: thin;
-      scrollbar-color: var(--card-border) transparent;
+      scrollbar-color: #3a3a3c transparent;
     }
-    .repo-list::-webkit-scrollbar { width: 6px; }
+
+    .repo-list::-webkit-scrollbar { width: 4px; }
     .repo-list::-webkit-scrollbar-track { background: transparent; }
-    .repo-list::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 3px; }
+    .repo-list::-webkit-scrollbar-thumb { background: #3a3a3c; border-radius: 2px; }
 
     .repo-item {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 10px 12px;
-      border-radius: var(--radius-sm);
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 10px;
       cursor: pointer;
-      transition: background .15s, border-color .15s;
-      border: 1px solid transparent;
-      margin-bottom: 4px;
+      transition: background .15s;
     }
-    .repo-item:hover { background: rgba(255,255,255,.03); }
-    .repo-item.selected {
-      background: rgba(99,102,241,.08);
-      border-color: var(--primary);
-    }
+
+    .repo-item:hover { background: #2c2c2e; }
+    .repo-item.selected { background: #2c2c2e; }
+
     .repo-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: var(--radius-sm);
-      background: rgba(99,102,241,.12);
+      width: 30px;
+      height: 30px;
+      background: #3a3a3c;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 16px;
+      font-size: 13px;
       flex-shrink: 0;
     }
+
     .repo-info { flex: 1; min-width: 0; }
+
     .repo-name {
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
+      color: #ffffff;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
     .repo-id {
       font-size: 11px;
-      color: var(--text-muted);
-      font-family: 'JetBrains Mono', monospace;
+      color: #636366;
+      margin-top: 1px;
+      font-family: 'SF Mono', 'Fira Mono', monospace;
     }
+
     .repo-check {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
+      border: 1.5px solid #3a3a3c;
       border-radius: 50%;
-      background: var(--primary);
-      display: none;
+      display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      transition: background .15s, border-color .15s;
     }
-    .repo-item.selected .repo-check { display: flex; }
-    .repo-check svg { width: 12px; height: 12px; }
+
+    .repo-item.selected .repo-check {
+      background: #0a84ff;
+      border-color: #0a84ff;
+    }
+
+    .repo-check svg { display: none; }
+    .repo-item.selected .repo-check svg { display: block; }
 
     .empty-state {
+      padding: 20px 10px;
       text-align: center;
-      padding: 32px 16px;
-      color: var(--text-muted);
       font-size: 13px;
+      color: #636366;
     }
 
-    /* SITES GRID */
-    .sites-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-    }
-    .site-card {
-      background: var(--bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-sm);
-      padding: 14px;
-      transition: border-color .2s;
-    }
-    .site-card:hover { border-color: var(--text-muted); }
-    .site-name {
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 6px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .site-meta {
+    /* SELECTED DEPLOY INFO */
+    .deploy-info {
       display: flex;
       align-items: center;
-      gap: 12px;
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-bottom: 10px;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #2c2c2e;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      min-height: 50px;
     }
-    .site-visit {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--primary-hover);
-      text-decoration: none;
-      transition: color .15s;
-    }
-    .site-visit:hover { color: var(--text); }
 
-    /* DEPLOY CARD */
-    .deploy-selection {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px;
-      background: var(--bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-sm);
-      margin-bottom: 16px;
-      min-height: 60px;
-    }
     .deploy-placeholder {
-      color: var(--text-muted);
       font-size: 13px;
+      color: #636366;
     }
-    .deploy-selected-name { font-size: 14px; font-weight: 600; }
-    .deploy-selected-id { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
 
-    .btn-deploy {
-      width: 100%;
-      padding: 12px;
-      background: var(--primary);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius-sm);
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background .2s, transform .1s, box-shadow .2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-    .btn-deploy:hover:not(:disabled) {
-      background: var(--primary-hover);
-      box-shadow: 0 0 20px rgba(99,102,241,.3);
-    }
-    .btn-deploy:active:not(:disabled) { transform: scale(.98); }
-    .btn-deploy:disabled {
-      opacity: .4;
-      cursor: not-allowed;
-    }
-    .btn-deploy.loading { pointer-events: none; }
-    .btn-deploy.success { background: var(--success); }
-    .btn-deploy.error { background: var(--error); }
-
-    .spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255,255,255,.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin .6s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .deploy-result {
-      margin-top: 16px;
-      padding: 12px;
-      border-radius: var(--radius-sm);
+    .deploy-selected-name {
       font-size: 13px;
-      line-height: 1.6;
-      display: none;
+      font-weight: 500;
+      color: #ffffff;
     }
-    .deploy-result.show { display: block; }
-    .deploy-result.result-success {
-      background: rgba(16,185,129,.08);
-      border: 1px solid rgba(16,185,129,.2);
-      color: var(--success);
-    }
-    .deploy-result.result-error {
-      background: rgba(239,68,68,.08);
-      border: 1px solid rgba(239,68,68,.2);
-      color: var(--error);
-    }
-    .deploy-result a {
-      color: var(--primary-hover);
-      text-decoration: underline;
+
+    .deploy-selected-id {
+      font-size: 11px;
+      color: #636366;
+      font-family: 'SF Mono', 'Fira Mono', monospace;
     }
 
     /* CONSOLE */
     .console-body {
-      background: #0a0a0a;
-      padding: 12px 16px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      line-height: 1.7;
-      max-height: 360px;
+      padding: 14px 16px;
+      font-family: 'SF Mono', 'Fira Mono', 'Menlo', 'Monaco', monospace;
+      font-size: 11.5px;
+      line-height: 1.65;
+      max-height: 240px;
       overflow-y: auto;
       scrollbar-width: thin;
-      scrollbar-color: var(--card-border) transparent;
+      scrollbar-color: #3a3a3c transparent;
+      min-height: 120px;
     }
-    .console-body::-webkit-scrollbar { width: 6px; }
+
+    .console-body::-webkit-scrollbar { width: 4px; }
     .console-body::-webkit-scrollbar-track { background: transparent; }
-    .console-body::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 3px; }
+    .console-body::-webkit-scrollbar-thumb { background: #3a3a3c; border-radius: 2px; }
 
     .log-line {
       white-space: pre-wrap;
       word-break: break-all;
-      animation: fadeIn .3s ease;
+      color: #8e8e93;
     }
-    .log-line .ts { color: var(--text-muted); }
-    .log-line.log-error { color: var(--error); }
-    .log-line.log-warning { color: var(--warning); }
-    .log-line.log-info { color: var(--text-secondary); }
 
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .log-line.log-error { color: #ff453a; }
+    .log-line.log-warning { color: #ffd60a; }
+    .log-line.log-info { color: #8e8e93; }
+    .log-line.log-success { color: #30d158; }
 
     .auto-scroll-notice {
       display: none;
       text-align: center;
       padding: 6px;
       font-size: 11px;
-      color: var(--text-muted);
-      background: rgba(255,255,255,.03);
+      color: #636366;
+      background: #2c2c2e;
       cursor: pointer;
-      border-top: 1px solid var(--card-border);
+      border-top: 1px solid #2c2c2e;
     }
-    .auto-scroll-notice:hover { color: var(--text-secondary); }
+
+    .auto-scroll-notice:hover { color: #8e8e93; }
     .auto-scroll-notice.show { display: block; }
 
-    /* FOOTER */
-    footer {
-      text-align: center;
-      padding: 32px 24px 24px;
-      font-size: 12px;
-      color: var(--text-muted);
+    /* DEPLOY RESULT */
+    .deploy-result {
+      display: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      margin-top: 10px;
     }
 
-    /* RESPONSIVE */
-    @media (max-width: 1024px) {
-      .content-grid { grid-template-columns: 1fr; }
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .deploy-result.show { display: block; }
+
+    .deploy-result.result-success {
+      background: rgba(48, 209, 88, .1);
+      color: #30d158;
     }
-    @media (max-width: 640px) {
-      .stats-row { grid-template-columns: 1fr; }
-      .sites-grid { grid-template-columns: 1fr; }
-      .container { padding: 68px 16px 16px; }
-      nav { padding: 0 16px; }
-      .stat-value { font-size: 22px; }
-      .card-body { padding: 12px 16px; }
+
+    .deploy-result.result-error {
+      background: rgba(255, 69, 58, .1);
+      color: #ff453a;
+    }
+
+    .deploy-result a {
+      color: #0a84ff;
+      text-decoration: underline;
+    }
+
+    /* DEPLOY BUTTON */
+    .deploy-btn {
+      width: 100%;
+      background: #1c1c1e;
+      color: #ffffff;
+      border: none;
+      border-radius: 100px;
+      padding: 18px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: opacity .2s, background .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .deploy-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .deploy-btn:not(:disabled):hover { background: #2c2c2e; }
+    .deploy-btn:not(:disabled):active { background: #3a3a3c; }
+
+    .deploy-btn.loading { opacity: 0.75; cursor: wait; }
+    .deploy-btn.success { background: rgba(48,209,88,.15); color: #30d158; }
+    .deploy-btn.error   { background: rgba(255,69,58,.15);  color: #ff453a; }
+
+    /* SPINNER */
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,.25);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* RESPONSIVE: on wider screens, expand to full width */
+    @media (min-width: 600px) {
+      .app { padding-top: 64px; }
     }
   </style>
 </head>
 <body>
 
-  <nav>
-    <div class="nav-brand"><span>⚡</span> Sycord</div>
-    <div class="nav-status">
-      <div class="pulse-dot" id="navDot"></div>
-      <span id="navStatusText">M1 · Connecting…</span>
-    </div>
-  </nav>
+<div class="app">
 
-  <main class="container">
-    <section class="stats-row">
-      <div class="stat-card">
-        <div class="stat-label">Server Status</div>
-        <div class="stat-value" id="statStatus">
-          <span class="dot" id="statusDot"></span>
-          <span id="statusText">—</span>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="logo-wrap">
+      <!-- Sycord M-wing logo -->
+      <svg width="52" height="40" viewBox="0 0 52 40" fill="none" xmlns="http://www.w3.org/2000/svg"
+           role="img" aria-label="Sycord logo">
+        <path d="M2 36 C2 36 10 4 14 4 C18 4 20 20 26 20 C32 20 34 4 38 4 C42 4 50 36 50 36"
+              stroke="#636366" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+    </div>
+    <h1>internal server</h1>
+  </header>
+
+  <!-- STATUS PILLS -->
+  <div class="pills">
+    <div class="pill" id="pillStatus">connecting</div>
+    <div class="pill" id="pillRepos">— repos</div>
+    <div class="pill" id="pillSites">— sites</div>
+  </div>
+
+  <!-- PROJECTS SECTION -->
+  <div class="section-label">projects</div>
+
+  <!-- CARD 1: Repositories -->
+  <div class="card">
+    <div class="card-inner">
+      <input type="text" class="search-input" id="repoSearch" placeholder="search repositories">
+      <div class="repo-list" id="repoList">
+        <div class="empty-state">loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 2: Console / Logs -->
+  <div class="card">
+    <div class="console-body" id="consoleBody">
+      <div class="log-line log-info">waiting for logs…</div>
+    </div>
+    <div class="auto-scroll-notice" id="autoScrollNotice">↓ new logs — tap to scroll</div>
+  </div>
+
+  <!-- SELECTED REPO INFO + RESULT -->
+  <div class="deploy-info" id="deployInfo">
+    <span class="deploy-placeholder">select a repository to deploy</span>
+  </div>
+  <div class="deploy-result" id="deployResult"></div>
+
+  <!-- DEPLOY BUTTON -->
+  <button class="deploy-btn" id="deployBtn" disabled>deploy</button>
+
+</div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+
+  let selectedRepo = null;
+  let autoScroll = true;
+  let deploying = false;
+  let allRepos = [];
+
+  /* ── Utilities ─────────────────────────────────────── */
+
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function relativeTime(dateStr) {
+    if (!dateStr) return '';
+    const diff = Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000));
+    if (isNaN(diff)) return '';
+    if (diff < 60) return diff + 's ago';
+    if (diff < 3600) return Math.floor(diff / 60) + 'min ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  /* ── Health ─────────────────────────────────────────── */
+
+  async function fetchHealth() {
+    try {
+      const res = await fetch('/api/health');
+      const data = await res.json();
+      const pill = $('#pillStatus');
+      pill.textContent = 'online';
+      pill.className = 'pill online';
+      if (data.deployed_sites !== undefined) {
+        $('#pillSites').textContent = data.deployed_sites + ' sites';
+      }
+    } catch {
+      const pill = $('#pillStatus');
+      pill.textContent = 'offline';
+      pill.className = 'pill offline';
+    }
+  }
+
+  /* ── Repos ──────────────────────────────────────────── */
+
+  async function fetchRepos() {
+    try {
+      const res = await fetch('/api/repos');
+      const data = await res.json();
+      if (!data.success) return;
+      allRepos = data.repositories || [];
+      $('#pillRepos').textContent = allRepos.length + ' repos';
+      renderRepos();
+    } catch {
+      $('#repoList').innerHTML = '<div class="empty-state">failed to load</div>';
+    }
+  }
+
+  function renderRepos() {
+    const filter = ($('#repoSearch').value || '').toLowerCase();
+    const filtered = allRepos.filter(r =>
+      (r.full_name || r.name || '').toLowerCase().includes(filter) ||
+      String(r.repo_id).includes(filter)
+    );
+    const list = $('#repoList');
+    if (!filtered.length) {
+      list.innerHTML = '<div class="empty-state">' +
+        (filter ? 'no matching repos' : 'no repositories found') +
+        '</div>';
+      return;
+    }
+    list.innerHTML = filtered.map(r => {
+      const isSelected = selectedRepo && selectedRepo.repo_id === r.repo_id;
+      return `<div class="repo-item${isSelected ? ' selected' : ''}" data-id="${escapeHtml(String(r.repo_id))}">
+        <div class="repo-icon">📁</div>
+        <div class="repo-info">
+          <div class="repo-name">${escapeHtml(r.full_name || r.name)}</div>
+          <div class="repo-id">${escapeHtml(String(r.repo_id))}</div>
         </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Repositories</div>
-        <div class="stat-value" id="statRepos">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Deployed Sites</div>
-        <div class="stat-value" id="statSites">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Server Host</div>
-        <div class="stat-value stat-host" id="statHost">—</div>
-      </div>
-    </section>
+        <div class="repo-check">
+          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+            <path d="M1 4l3 3 5-5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>`;
+    }).join('');
 
-    <div class="content-grid">
-      <div class="left-column">
-
-        <section class="card repos-card">
-          <div class="card-header">
-            <h2>📦 Repositories <span class="badge" id="repoBadge">0</span></h2>
-          </div>
-          <div class="card-body">
-            <input type="text" class="search-input" id="repoSearch" placeholder="Search repositories…">
-            <div class="repo-list" id="repoList">
-              <div class="empty-state">Loading repositories…</div>
-            </div>
-          </div>
-        </section>
-
-        <section class="card sites-card">
-          <div class="card-header">
-            <h2>🌐 Deployed Sites <span class="badge" id="siteBadge">0</span></h2>
-          </div>
-          <div class="card-body">
-            <div class="sites-grid" id="sitesGrid">
-              <div class="empty-state" style="grid-column:1/-1">Loading sites…</div>
-            </div>
-          </div>
-        </section>
-
-      </div>
-
-      <div class="right-column">
-
-        <section class="card deploy-card">
-          <div class="card-header">
-            <h2>🚀 Deploy</h2>
-          </div>
-          <div class="card-body">
-            <div class="deploy-selection" id="deploySelection">
-              <span class="deploy-placeholder">Select a repository to deploy</span>
-            </div>
-            <button class="btn-deploy" id="deployBtn" disabled>Deploy</button>
-            <div class="deploy-result" id="deployResult"></div>
-          </div>
-        </section>
-
-        <section class="card console-card">
-          <div class="card-header">
-            <h2><div class="pulse-dot" style="margin-right:4px"></div> Console</h2>
-          </div>
-          <div class="console-body" id="consoleBody"></div>
-          <div class="auto-scroll-notice" id="autoScrollNotice">↓ New logs available — click to scroll down</div>
-        </section>
-
-      </div>
-    </div>
-  </main>
-
-  <footer>Sycord Deployment Server · M1 Instance</footer>
-
-  <script>
-    const $ = (s) => document.querySelector(s);
-    const $$ = (s) => document.querySelectorAll(s);
-
-    let selectedRepo = null;
-    let autoScroll = true;
-    let deploying = false;
-
-    function relativeTime(dateStr) {
-      if (!dateStr) return '';
-      const then = new Date(dateStr).getTime();
-      if (isNaN(then)) return '';
-      const diff = Math.max(0, Math.floor((Date.now() - then) / 1000));
-      if (diff < 60) return diff + 's ago';
-      if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
-      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-      return Math.floor(diff / 86400) + 'd ago';
-    }
-
-    function animateCount(el, target) {
-      const start = parseInt(el.textContent) || 0;
-      if (start === target) return;
-      const duration = 500;
-      const startTime = performance.now();
-      function tick(now) {
-        const elapsed = now - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        el.textContent = Math.round(start + (target - start) * eased);
-        if (progress < 1) requestAnimationFrame(tick);
-      }
-      requestAnimationFrame(tick);
-    }
-
-    async function fetchHealth() {
-      try {
-        const res = await fetch('/api/health');
-        const data = await res.json();
-        $('#statusDot').className = 'dot green';
-        $('#statusText').textContent = 'Healthy';
-        $('#navDot').className = 'pulse-dot';
-        $('#navStatusText').textContent = 'M1 · Online';
-        $('#statHost').textContent = data.server_host || '—';
-        if (data.deployed_sites !== undefined) {
-          animateCount($('#statSites'), data.deployed_sites);
-        }
-      } catch {
-        $('#statusDot').className = 'dot red';
-        $('#statusText').textContent = 'Offline';
-        $('#navDot').className = 'pulse-dot offline';
-        $('#navStatusText').textContent = 'M1 · Offline';
-      }
-    }
-
-    async function fetchRepos() {
-      try {
-        const res = await fetch('/api/repos');
-        const data = await res.json();
-        if (!data.success) return;
-        const repos = data.repositories || [];
-        animateCount($('#statRepos'), repos.length);
-        $('#repoBadge').textContent = repos.length;
-        renderRepos(repos);
-      } catch {
-        $('#repoList').innerHTML = '<div class="empty-state">Failed to load repositories</div>';
-      }
-    }
-
-    function renderRepos(repos) {
-      const filter = ($('#repoSearch').value || '').toLowerCase();
-      const filtered = repos.filter(r => (r.full_name || r.name || '').toLowerCase().includes(filter));
-      const list = $('#repoList');
-      if (!filtered.length) {
-        list.innerHTML = '<div class="empty-state">' + (filter ? 'No matching repositories' : 'No repositories found') + '</div>';
-        return;
-      }
-      list.innerHTML = filtered.map(r => {
-        const isSelected = selectedRepo && selectedRepo.repo_id === r.repo_id;
-        return '<div class="repo-item' + (isSelected ? ' selected' : '') + '" data-id="' + r.repo_id + '">' +
-          '<div class="repo-icon">📁</div>' +
-          '<div class="repo-info">' +
-            '<div class="repo-name">' + escapeHtml(r.full_name || r.name) + '</div>' +
-            '<div class="repo-id">' + escapeHtml(String(r.repo_id)) + '</div>' +
-          '</div>' +
-          '<div class="repo-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
-        '</div>';
-      }).join('');
-
-      list.querySelectorAll('.repo-item').forEach(el => {
-        el.addEventListener('click', () => {
-          const id = el.dataset.id;
-          const repo = repos.find(r => String(r.repo_id) === id);
-          if (!repo) return;
-          selectRepo(repo);
-          renderRepos(repos);
-        });
+    list.querySelectorAll('.repo-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const repo = allRepos.find(r => String(r.repo_id) === el.dataset.id);
+        if (repo) selectRepo(repo);
       });
+    });
+  }
 
-      window._allRepos = repos;
+  function selectRepo(repo) {
+    selectedRepo = repo;
+    $('#deployInfo').innerHTML =
+      `<div class="repo-icon" style="flex-shrink:0">📁</div>
+       <div>
+         <div class="deploy-selected-name">${escapeHtml(repo.full_name || repo.name)}</div>
+         <div class="deploy-selected-id">${escapeHtml(String(repo.repo_id))}</div>
+       </div>`;
+    $('#deployBtn').disabled = false;
+    const result = $('#deployResult');
+    result.className = 'deploy-result';
+    result.style.display = 'none';
+    renderRepos();
+  }
+
+  /* ── Sites ──────────────────────────────────────────── */
+
+  async function fetchSites() {
+    try {
+      const res = await fetch('/api/sites');
+      const data = await res.json();
+      if (!data.success) return;
+      const total = data.total || (data.sites || []).length;
+      $('#pillSites').textContent = total + ' sites';
+    } catch {}
+  }
+
+  /* ── Logs ───────────────────────────────────────────── */
+
+  let prevLogsKey = '';
+
+  async function fetchLogs() {
+    try {
+      const params = selectedRepo
+        ? '?project_id=' + encodeURIComponent(selectedRepo.repo_id) + '&limit=300'
+        : '?limit=300';
+      const res = await fetch('/api/logs' + params);
+      const data = await res.json();
+      if (!data.success) return;
+      const logs = data.logs || [];
+      const key = logs.length + '|' + (logs[logs.length - 1] || '');
+      if (key === prevLogsKey) return;
+      prevLogsKey = key;
+      renderLogs(logs);
+    } catch {}
+  }
+
+  function renderLogs(logs) {
+    const body = $('#consoleBody');
+    const atBottom = autoScroll;
+
+    if (!logs.length) {
+      body.innerHTML = '<div class="log-line log-info">no logs yet…</div>';
+      return;
     }
 
-    function selectRepo(repo) {
-      selectedRepo = repo;
-      const sel = $('#deploySelection');
-      sel.innerHTML = '<div class="repo-icon">📁</div><div><div class="deploy-selected-name">' +
-        escapeHtml(repo.full_name || repo.name) +
-        '</div><div class="deploy-selected-id">' + escapeHtml(String(repo.repo_id)) + '</div></div>';
-      $('#deployBtn').disabled = false;
-      $('#deployResult').className = 'deploy-result';
-      $('#deployResult').style.display = 'none';
+    body.innerHTML = logs.map(line => {
+      let cls = 'log-line log-info';
+      const u = line.toUpperCase();
+      if (u.includes('[ERROR]') || u.includes('ERROR:'))    cls = 'log-line log-error';
+      else if (u.includes('[WARN') || u.includes('WARNING')) cls = 'log-line log-warning';
+      else if (u.includes('SUCCESS') || u.includes('✓'))    cls = 'log-line log-success';
+      return `<div class="${cls}">${escapeHtml(line)}</div>`;
+    }).join('');
+
+    if (atBottom) {
+      body.scrollTop = body.scrollHeight;
+    } else {
+      $('#autoScrollNotice').classList.add('show');
     }
+  }
 
-    async function fetchSites() {
-      try {
-        const res = await fetch('/api/sites');
-        const data = await res.json();
-        if (!data.success) return;
-        const sites = data.sites || [];
-        animateCount($('#statSites'), data.total || sites.length);
-        $('#siteBadge').textContent = data.total || sites.length;
-        renderSites(sites);
-      } catch {
-        $('#sitesGrid').innerHTML = '<div class="empty-state" style="grid-column:1/-1">Failed to load sites</div>';
-      }
-    }
+  /* ── Deploy ─────────────────────────────────────────── */
 
-    function renderSites(sites) {
-      const grid = $('#sitesGrid');
-      if (!sites.length) {
-        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No sites deployed yet</div>';
-        return;
-      }
-      grid.innerHTML = sites.map(s => {
-        const files = s.files !== undefined ? s.files + ' files' : '';
-        const time = relativeTime(s.deployed_at);
-        const url = s.url || s.local_url || '';
-        const visitLink = url
-          ? '<a class="site-visit" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">Visit ↗</a>'
-          : '<span class="site-visit" style="opacity:0.4;cursor:default">Pending DNS</span>';
-        return '<div class="site-card">' +
-          '<div class="site-name" title="' + escapeHtml(s.name) + '">' + escapeHtml(s.name) + '</div>' +
-          '<div class="site-meta">' +
-            (files ? '<span>' + files + '</span>' : '') +
-            (time ? '<span>' + time + '</span>' : '') +
-          '</div>' +
-          visitLink +
-        '</div>';
-      }).join('');
-    }
+  async function doDeploy() {
+    if (!selectedRepo || deploying) return;
+    deploying = true;
+    const btn = $('#deployBtn');
+    const result = $('#deployResult');
 
-    async function fetchLogs() {
-      try {
-        const params = selectedRepo ? '?project_id=' + selectedRepo.repo_id + '&limit=200' : '?limit=200';
-        const res = await fetch('/api/logs' + params);
-        const data = await res.json();
-        if (!data.success) return;
-        const logs = data.logs || [];
-        const logsKey = logs.join('\n');
-        if (logsKey === window._prevLogsKey) return;
-        window._prevLogsKey = logsKey;
-        renderLogs(logs);
-      } catch {}
-    }
+    btn.className = 'deploy-btn loading';
+    btn.innerHTML = '<div class="spinner"></div> deploying…';
+    btn.disabled = true;
+    result.className = 'deploy-result';
+    result.style.display = 'none';
 
-    function renderLogs(logs) {
-      const body = $('#consoleBody');
-      const wasAtBottom = autoScroll;
-      body.innerHTML = logs.map(line => {
-        let cls = 'log-line';
-        if (/\[ERROR\]/i.test(line)) cls += ' log-error';
-        else if (/\[WARN(ING)?\]/i.test(line)) cls += ' log-warning';
-        else cls += ' log-info';
-        return '<div class="' + cls + '">' + escapeHtml(line) + '</div>';
-      }).join('');
-      if (wasAtBottom) {
-        body.scrollTop = body.scrollHeight;
-      } else {
-        $('#autoScrollNotice').classList.add('show');
-      }
-    }
+    try {
+      const res = await fetch('/api/deploy/' + encodeURIComponent(selectedRepo.repo_id), { method: 'POST' });
+      const data = await res.json();
 
-    async function doDeploy() {
-      if (!selectedRepo || deploying) return;
-      deploying = true;
-      const btn = $('#deployBtn');
-      const result = $('#deployResult');
-      btn.className = 'btn-deploy loading';
-      btn.innerHTML = '<div class="spinner"></div> Deploying…';
-      btn.disabled = true;
-      result.className = 'deploy-result';
-      result.style.display = 'none';
-
-      try {
-        const res = await fetch('/api/deploy/' + selectedRepo.repo_id, { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          btn.className = 'btn-deploy success';
-          btn.innerHTML = '✓ Deployed';
-          result.className = 'deploy-result result-success show';
-          result.style.display = 'block';
-          let msg = escapeHtml(data.message || 'Deployment successful');
-          const deployUrl = data.url || data.local_url;
-          if (deployUrl) {
-            msg += '<br><a href="' + escapeHtml(deployUrl) + '" target="_blank" rel="noopener">' + escapeHtml(deployUrl) + '</a>';
-          }
-          result.innerHTML = msg;
-          fetchSites();
-          fetchHealth();
-        } else {
-          btn.className = 'btn-deploy error';
-          btn.innerHTML = '✗ Failed';
-          result.className = 'deploy-result result-error show';
-          result.style.display = 'block';
-          result.innerHTML = escapeHtml(data.message || 'Deployment failed');
+      if (data.success) {
+        btn.className = 'deploy-btn success';
+        btn.textContent = '✓ deployed';
+        result.className = 'deploy-result result-success show';
+        result.style.display = 'block';
+        let msg = escapeHtml(data.message || 'deployment successful');
+        const url = data.url || data.local_url;
+        if (url) {
+          msg += '<br><a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">'
+               + escapeHtml(url) + '</a>';
         }
-      } catch (err) {
-        btn.className = 'btn-deploy error';
-        btn.innerHTML = '✗ Error';
+        result.innerHTML = msg;
+        fetchSites();
+        fetchHealth();
+        fetchLogs();
+      } else {
+        btn.className = 'deploy-btn error';
+        btn.textContent = '✗ failed';
         result.className = 'deploy-result result-error show';
         result.style.display = 'block';
-        result.innerHTML = escapeHtml('Network error: ' + err.message);
+        result.textContent = data.message || data.error || 'deployment failed';
       }
-
-      setTimeout(() => {
-        btn.className = 'btn-deploy';
-        btn.innerHTML = 'Deploy';
-        btn.disabled = false;
-        deploying = false;
-      }, 3000);
+    } catch (err) {
+      btn.className = 'deploy-btn error';
+      btn.textContent = '✗ error';
+      result.className = 'deploy-result result-error show';
+      result.style.display = 'block';
+      result.textContent = 'network error: ' + err.message;
     }
 
-    function escapeHtml(str) {
-      if (str == null) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
+    setTimeout(() => {
+      btn.className = 'deploy-btn';
+      btn.textContent = 'deploy';
+      btn.disabled = false;
+      deploying = false;
+    }, 4000);
+  }
 
-    // Console auto-scroll
-    const consoleBody = $('#consoleBody');
-    consoleBody.addEventListener('scroll', () => {
-      const atBottom = consoleBody.scrollHeight - consoleBody.scrollTop - consoleBody.clientHeight < 30;
-      autoScroll = atBottom;
-      if (atBottom) $('#autoScrollNotice').classList.remove('show');
-    });
-    $('#autoScrollNotice').addEventListener('click', () => {
-      consoleBody.scrollTop = consoleBody.scrollHeight;
-      autoScroll = true;
-      $('#autoScrollNotice').classList.remove('show');
-    });
+  /* ── Event listeners ────────────────────────────────── */
 
-    // Repo search
-    $('#repoSearch').addEventListener('input', () => {
-      if (window._allRepos) renderRepos(window._allRepos);
-    });
+  $('#consoleBody').addEventListener('scroll', () => {
+    const el = $('#consoleBody');
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+    autoScroll = atBottom;
+    if (atBottom) $('#autoScrollNotice').classList.remove('show');
+  });
 
-    // Deploy button
-    $('#deployBtn').addEventListener('click', doDeploy);
+  $('#autoScrollNotice').addEventListener('click', () => {
+    const el = $('#consoleBody');
+    el.scrollTop = el.scrollHeight;
+    autoScroll = true;
+    $('#autoScrollNotice').classList.remove('show');
+  });
 
-    // Init
-    fetchHealth();
-    fetchRepos();
-    fetchSites();
-    fetchLogs();
+  $('#repoSearch').addEventListener('input', renderRepos);
+  $('#deployBtn').addEventListener('click', doDeploy);
 
-    setInterval(fetchLogs, 2000);
-    setInterval(fetchSites, 10000);
-    setInterval(fetchHealth, 15000);
-  </script>
+  /* ── Init ───────────────────────────────────────────── */
+
+  fetchHealth();
+  fetchRepos();
+  fetchSites();
+  fetchLogs();
+
+  setInterval(fetchLogs,   2000);
+  setInterval(fetchSites, 10000);
+  setInterval(fetchHealth, 15000);
+</script>
 
 </body>
 </html>
