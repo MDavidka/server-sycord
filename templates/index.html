@@ -1,1127 +1,837 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M1 Instance - Sycord Deployment</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            background-color: #19191B;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            color: #ffffff;
-        }
-
-        .container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            max-width: 100%;
-            width: 100%;
-            padding: 20px;
-            padding-bottom: env(safe-area-inset-bottom, 20px);
-        }
-
-        /* Header Section */
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            margin-bottom: 24px;
-        }
-
-        .instance-badge {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .instance-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .instance-icon svg {
-            width: 24px;
-            height: 24px;
-            color: #19191B;
-        }
-
-        .instance-info h1 {
-            font-size: 18px;
-            font-weight: 600;
-            color: #ffffff;
-            letter-spacing: -0.02em;
-        }
-
-        .instance-info span {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.5);
-            font-weight: 400;
-        }
-
-        /* Data Transfer Animation Card */
-        .data-transfer-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 24px;
-        }
-
-        .transfer-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .transfer-icon {
-            width: 44px;
-            height: 44px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .transfer-icon svg {
-            width: 24px;
-            height: 24px;
-            color: #ffffff;
-        }
-
-        .transfer-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #ffffff;
-        }
-
-        .transfer-subtitle {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        /* Data Flow Animation */
-        .data-flow {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 24px 0;
-        }
-
-        .server-node {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .server-icon {
-            width: 56px;
-            height: 56px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-
-        .server-icon svg {
-            width: 28px;
-            height: 28px;
-            color: #ffffff;
-        }
-
-        .server-label {
-            font-size: 11px;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.6);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        /* Data Stream Animation */
-        .data-stream {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 0 8px;
-        }
-
-        .data-dot {
-            width: 6px;
-            height: 6px;
-            background: #ffffff;
-            border-radius: 50%;
-            opacity: 0.3;
-            animation: flow 1.5s ease-in-out infinite;
-        }
-
-        .data-dot:nth-child(1) { animation-delay: 0s; }
-        .data-dot:nth-child(2) { animation-delay: 0.2s; }
-        .data-dot:nth-child(3) { animation-delay: 0.4s; }
-        .data-dot:nth-child(4) { animation-delay: 0.6s; }
-        .data-dot:nth-child(5) { animation-delay: 0.8s; }
-
-        @keyframes flow {
-            0%, 100% { opacity: 0.2; transform: scale(0.8); }
-            50% { opacity: 1; transform: scale(1.2); }
-        }
-
-        /* Repository Selection */
-        .repo-section {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 24px;
-        }
-
-        .repo-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
-        }
-
-        .repo-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .repo-title svg {
-            width: 20px;
-            height: 20px;
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        .repo-title h2 {
-            font-size: 15px;
-            font-weight: 600;
-            color: #ffffff;
-        }
-
-        .repo-count {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.4);
-            padding: 4px 10px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-        }
-
-        .repo-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .repo-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 16px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .repo-item:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(255, 255, 255, 0.12);
-        }
-
-        .repo-item.selected {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        .repo-item-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .repo-item-icon {
-            width: 36px;
-            height: 36px;
-            background: rgba(255, 255, 255, 0.06);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .repo-item-icon svg {
-            width: 18px;
-            height: 18px;
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        .repo-item-name {
-            font-size: 14px;
-            font-weight: 500;
-            color: #ffffff;
-        }
-
-        .repo-item-id {
-            font-size: 11px;
-            color: rgba(255, 255, 255, 0.4);
-            font-family: 'SF Mono', Monaco, monospace;
-        }
-
-        .repo-select-btn {
-            width: 20px;
-            height: 20px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-        }
-
-        .repo-item.selected .repo-select-btn {
-            background: #ffffff;
-            border-color: #ffffff;
-        }
-
-        .repo-item.selected .repo-select-btn::after {
-            content: '';
-            width: 8px;
-            height: 8px;
-            background: #19191B;
-            border-radius: 50%;
-        }
-
-        .loading-repos {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px 20px;
-            gap: 16px;
-        }
-
-        .loading-spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #ffffff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .loading-text {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        /* Deploy Button */
-        .deploy-section {
-            margin-top: auto;
-            padding-top: 24px;
-        }
-
-        .deploy-button {
-            width: 100%;
-            padding: 18px 24px;
-            background: #ffffff;
-            color: #19191B;
-            border: none;
-            border-radius: 14px;
-            font-family: 'Inter', sans-serif;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-
-        .deploy-button:hover {
-            background: rgba(255, 255, 255, 0.9);
-            transform: translateY(-1px);
-        }
-
-        .deploy-button:active {
-            transform: translateY(0);
-        }
-
-        .deploy-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .deploy-button svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        /* Message */
-        .message {
-            margin-top: 16px;
-            padding: 16px;
-            border-radius: 12px;
-            font-size: 14px;
-            display: none;
-            text-align: center;
-        }
-
-        .message.success {
-            background: rgba(34, 197, 94, 0.1);
-            color: #22c55e;
-            border: 1px solid rgba(34, 197, 94, 0.2);
-        }
-
-        .message.error {
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
-        .message.show {
-            display: block;
-        }
-
-        /* API Info */
-        .api-section {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 24px;
-        }
-
-        .api-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
-        }
-
-        .api-header-left {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .api-header svg {
-            width: 18px;
-            height: 18px;
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        .api-header h3 {
-            font-size: 14px;
-            font-weight: 600;
-            color: #ffffff;
-        }
-
-        .info-button {
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: rgba(255, 255, 255, 0.5);
-            transition: color 0.2s;
-            padding: 4px;
-        }
-
-        .info-button:hover {
-            color: #ffffff;
-        }
-
-        .api-docs {
-            font-size: 13px;
-            line-height: 1.5;
-            color: rgba(255, 255, 255, 0.7);
-            background: rgba(255, 255, 255, 0.05);
-            padding: 16px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            display: none;
-        }
-
-        .api-docs.show {
-            display: block;
-        }
-
-        .endpoint {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 14px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 10px;
-            margin-bottom: 8px;
-        }
-
-        .endpoint:last-child {
-            margin-bottom: 0;
-        }
-
-        .endpoint-method {
-            font-size: 11px;
-            font-weight: 600;
-            color: #19191B;
-            background: #ffffff;
-            padding: 4px 8px;
-            border-radius: 4px;
-            letter-spacing: 0.02em;
-        }
-
-        .endpoint-method.get {
-            background: #22c55e;
-            color: #ffffff;
-        }
-
-        .endpoint-method.post {
-            background: #3b82f6;
-            color: #ffffff;
-        }
-
-        .endpoint-path {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.7);
-            font-family: 'SF Mono', Monaco, monospace;
-        }
-
-        /* Console Section */
-        .console-section {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .console-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .console-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .console-title svg {
-            width: 18px;
-            height: 18px;
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        .console-title h3 {
-            font-size: 14px;
-            font-weight: 600;
-            color: #ffffff;
-        }
-
-        .console-status {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.5);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            background: #22c55e;
-            border-radius: 50%;
-            box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(0.8); }
-            100% { opacity: 1; transform: scale(1); }
-        }
-
-        .console-window {
-            background: #0d0d0e;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            height: 300px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .console-content {
-            flex: 1;
-            padding: 16px;
-            overflow-y: auto;
-            font-family: 'SF Mono', Monaco, monospace;
-            font-size: 12px;
-            line-height: 1.6;
-            color: #d4d4d8;
-        }
-
-        .log-entry {
-            margin-bottom: 4px;
-            word-break: break-all;
-            white-space: pre-wrap;
-        }
-
-        .log-entry:last-child {
-            margin-bottom: 0;
-        }
-
-        .log-entry.system {
-            color: rgba(255, 255, 255, 0.4);
-            font-style: italic;
-        }
-
-        .log-entry.error {
-            color: #ef4444;
-        }
-
-        .log-entry.warning {
-            color: #f59e0b;
-        }
-
-        .console-content::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .console-content::-webkit-scrollbar-track {
-            background: #0d0d0e;
-        }
-
-        .console-content::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 4px;
-            border: 2px solid #0d0d0e;
-        }
-
-        .console-content::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.25);
-        }
-
-        /* Mobile Optimizations */
-        @media (max-width: 480px) {
-            .container {
-                padding: 16px;
-            }
-
-            .header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 16px;
-            }
-
-            .instance-info h1 {
-                font-size: 16px;
-            }
-
-            .data-transfer-card {
-                padding: 20px;
-            }
-
-            .server-icon {
-                width: 48px;
-                height: 48px;
-            }
-
-            .server-icon svg {
-                width: 24px;
-                height: 24px;
-            }
-
-            .repo-item {
-                padding: 12px 14px;
-            }
-
-            .deploy-button {
-                padding: 16px 20px;
-                font-size: 15px;
-            }
-        }
-
-        /* Scrollbar Styling */
-        .repo-list::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .repo-list::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 3px;
-        }
-
-        .repo-list::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 3px;
-        }
-
-        .repo-list::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.25);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sycord · Deployment Server</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #09090b;
+      --card-bg: #18181b;
+      --card-border: #27272a;
+      --primary: #6366f1;
+      --primary-hover: #818cf8;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --text: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: rgba(9,9,11,.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .nav-brand span { font-size: 20px; }
+    .nav-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: rgba(39,39,42,.6);
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--card-border);
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      position: relative;
+    }
+    .pulse-dot::after {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 50%;
+      background: var(--success);
+      opacity: 0;
+      animation: pulse 2s ease-out infinite;
+    }
+    .pulse-dot.offline { background: var(--error); }
+    .pulse-dot.offline::after { background: var(--error); }
+
+    @keyframes pulse {
+      0% { opacity: .6; transform: scale(1); }
+      100% { opacity: 0; transform: scale(2.2); }
+    }
+
+    /* CONTAINER */
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 72px 24px 24px;
+    }
+
+    /* STATS ROW */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .stat-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 24px rgba(0,0,0,.3);
+    }
+    .stat-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .stat-value .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .stat-value .dot.green { background: var(--success); }
+    .stat-value .dot.red { background: var(--error); }
+    .stat-host {
+      font-size: 14px;
+      font-weight: 500;
+      word-break: break-all;
+    }
+
+    /* CONTENT GRID */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 24px;
+    }
+    .left-column, .right-column { display: flex; flex-direction: column; gap: 24px; }
+
+    /* CARDS */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 24px rgba(0,0,0,.3);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .card-header h2 {
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 22px;
+      padding: 0 7px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 11px;
+      background: rgba(99,102,241,.15);
+      color: var(--primary-hover);
+    }
+    .card-body { padding: 16px 20px; }
+
+    /* SEARCH */
+    .search-input {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      transition: border-color .2s;
+      margin-bottom: 12px;
+    }
+    .search-input::placeholder { color: var(--text-muted); }
+    .search-input:focus { border-color: var(--primary); }
+
+    /* REPO LIST */
+    .repo-list {
+      max-height: 300px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--card-border) transparent;
+    }
+    .repo-list::-webkit-scrollbar { width: 6px; }
+    .repo-list::-webkit-scrollbar-track { background: transparent; }
+    .repo-list::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 3px; }
+
+    .repo-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+      border: 1px solid transparent;
+      margin-bottom: 4px;
+    }
+    .repo-item:hover { background: rgba(255,255,255,.03); }
+    .repo-item.selected {
+      background: rgba(99,102,241,.08);
+      border-color: var(--primary);
+    }
+    .repo-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background: rgba(99,102,241,.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .repo-info { flex: 1; min-width: 0; }
+    .repo-name {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .repo-id {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .repo-check {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .repo-item.selected .repo-check { display: flex; }
+    .repo-check svg { width: 12px; height: 12px; }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    /* SITES GRID */
+    .sites-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .site-card {
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      transition: border-color .2s;
+    }
+    .site-card:hover { border-color: var(--text-muted); }
+    .site-name {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .site-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .site-visit {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--primary-hover);
+      text-decoration: none;
+      transition: color .15s;
+    }
+    .site-visit:hover { color: var(--text); }
+
+    /* DEPLOY CARD */
+    .deploy-selection {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+      min-height: 60px;
+    }
+    .deploy-placeholder {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .deploy-selected-name { font-size: 14px; font-weight: 600; }
+    .deploy-selected-id { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+
+    .btn-deploy {
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, transform .1s, box-shadow .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-deploy:hover:not(:disabled) {
+      background: var(--primary-hover);
+      box-shadow: 0 0 20px rgba(99,102,241,.3);
+    }
+    .btn-deploy:active:not(:disabled) { transform: scale(.98); }
+    .btn-deploy:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+    .btn-deploy.loading { pointer-events: none; }
+    .btn-deploy.success { background: var(--success); }
+    .btn-deploy.error { background: var(--error); }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .deploy-result {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      line-height: 1.6;
+      display: none;
+    }
+    .deploy-result.show { display: block; }
+    .deploy-result.result-success {
+      background: rgba(16,185,129,.08);
+      border: 1px solid rgba(16,185,129,.2);
+      color: var(--success);
+    }
+    .deploy-result.result-error {
+      background: rgba(239,68,68,.08);
+      border: 1px solid rgba(239,68,68,.2);
+      color: var(--error);
+    }
+    .deploy-result a {
+      color: var(--primary-hover);
+      text-decoration: underline;
+    }
+
+    /* CONSOLE */
+    .console-body {
+      background: #0a0a0a;
+      padding: 12px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      max-height: 360px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--card-border) transparent;
+    }
+    .console-body::-webkit-scrollbar { width: 6px; }
+    .console-body::-webkit-scrollbar-track { background: transparent; }
+    .console-body::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 3px; }
+
+    .log-line {
+      white-space: pre-wrap;
+      word-break: break-all;
+      animation: fadeIn .3s ease;
+    }
+    .log-line .ts { color: var(--text-muted); }
+    .log-line.log-error { color: var(--error); }
+    .log-line.log-warning { color: var(--warning); }
+    .log-line.log-info { color: var(--text-secondary); }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .auto-scroll-notice {
+      display: none;
+      text-align: center;
+      padding: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: rgba(255,255,255,.03);
+      cursor: pointer;
+      border-top: 1px solid var(--card-border);
+    }
+    .auto-scroll-notice:hover { color: var(--text-secondary); }
+    .auto-scroll-notice.show { display: block; }
+
+    /* FOOTER */
+    footer {
+      text-align: center;
+      padding: 32px 24px 24px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 1024px) {
+      .content-grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .stats-row { grid-template-columns: 1fr; }
+      .sites-grid { grid-template-columns: 1fr; }
+      .container { padding: 68px 16px 16px; }
+      nav { padding: 0 16px; }
+      .stat-value { font-size: 22px; }
+      .card-body { padding: 12px 16px; }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="instance-badge">
-                <div class="instance-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M4 5h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm0 8h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1zm2 2v2h2v-2H6zm0-8v2h2V7H6z"/>
-                    </svg>
-                </div>
-                <div class="instance-info">
-                    <h1>M1 Instance</h1>
-                    <span>Sycord Deployment Server</span>
-                </div>
-            </div>
-        </header>
 
-        <!-- Data Transfer Animation -->
-        <section class="data-transfer-card">
-            <div class="transfer-header">
-                <div class="transfer-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
-                    </svg>
-                </div>
-                <div>
-                    <div class="transfer-title">Real-time Data Sync</div>
-                    <div class="transfer-subtitle">GitHub → Cloudflare Pages</div>
-                </div>
-            </div>
-            <div class="data-flow">
-                <div class="server-node">
-                    <div class="server-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                        </svg>
-                    </div>
-                    <span class="server-label">GitHub</span>
-                </div>
-                <div class="data-stream">
-                    <div class="data-dot"></div>
-                    <div class="data-dot"></div>
-                    <div class="data-dot"></div>
-                    <div class="data-dot"></div>
-                    <div class="data-dot"></div>
-                </div>
-                <div class="server-node">
-                    <div class="server-icon">
-                        <!-- Correct Cloudflare Icon -->
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M11.666 11.233a1.458 1.458 0 0 1-.225 1.55c-.2.233-.525.392-.817.4-1.291.033-2.616-.017-3.908-.008.267.4.408.842.533 1.292.05.183.083.375.142.55.333 1.05.9 1.95 1.775 2.65a5.55 5.55 0 0 0 3.25.991c.083 0 .166-.008.258-.008l.175.008h6.583a4.01 4.01 0 0 0 1.992-7.508 4.6 4.6 0 0 0-4.042-2.733 4.5 4.5 0 0 0-3.967 2.216 4.8 4.8 0 0 0-.6 1.042c-.225-.267-.5-.467-.825-.492-.108-.008-.216-.025-.325-.033zM9.433 9.425a5.3 5.3 0 0 1 1.084-.367c.183-.042.366-.067.55-.075.05 0 .1-.008.15-.008.066 0 .125 0 .191.008l.009-.175c.041-1.25.591-2.4 1.541-3.233a4.46 4.46 0 0 1 2.917-1.075c1.191 0 2.308.45 3.166 1.25.267.25.509.525.725.817.025.033.05.066.075.1l.034.192c.008.05.016.1.025.141.658-.333 1.391-.516 2.133-.516h.058l.183.008c.55.033 1.084.141 1.592.316l.125.042.175-.125a6.04 6.04 0 0 0-1.267-2.608A5.92 5.92 0 0 0 18.275 1.9a5.96 5.96 0 0 0-3.325-1.008 5.86 5.86 0 0 0-5.183 3.325 5.8 5.8 0 0 0-.275 4.091l.066.234-.125.183a6.1 6.1 0 0 0-1.391 3.517l-.009.116.117-.05c.425-.191.866-.333 1.316-.416l.109-.017-.142-.45zM8.217 12.167a2.53 2.53 0 0 1 .841-1.834l.117-.1-.133-.083a2.95 2.95 0 0 0-1.575-.45h-.225c-1.633 0-2.967 1.333-2.967 2.967 0 1.291.85 2.4 2.025 2.808l.15.05.025-.158c.2-.925.875-1.667 1.742-2.008z"/>
-                        </svg>
-                    </div>
-                    <span class="server-label">Cloudflare</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- Repository Selection -->
-        <section class="repo-section">
-            <div class="repo-header">
-                <div class="repo-title">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M3 3h18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1 2v14h16V5H4zm4 2h8v2H8V7zm0 4h8v2H8v-2z"/>
-                    </svg>
-                    <h2>Select Repository</h2>
-                </div>
-                <span class="repo-count" id="repoCount">Loading...</span>
-            </div>
-            <div class="repo-list" id="repoList">
-                <div class="loading-repos">
-                    <div class="loading-spinner"></div>
-                    <span class="loading-text">Loading repositories...</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- API Endpoints -->
-        <section class="api-section">
-            <div class="api-header">
-                <div class="api-header-left">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 4h16v16H4zM9 9h6M9 13h6M9 17h4"/>
-                    </svg>
-                    <h3>API Endpoints</h3>
-                </div>
-                <button class="info-button" onclick="toggleApiDocs()" title="Show API Documentation">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-11v6h2v-6h-2zm0-4v2h2V7h-2z"/>
-                    </svg>
-                </button>
-            </div>
-
-            <div class="api-docs" id="apiDocs">
-                <p><strong>How the API works:</strong></p>
-                <p>1. <code>/api/repos</code> (GET): Fetches all repositories from the database.</p>
-                <p>2. <code>/api/repos/{username}</code> (GET): Fetches repositories for a specific user.</p>
-                <p>3. <code>/api/deploy/{repo_id}</code> (GET/POST): Trigger a deployment using repo_id. The server downloads the code from GitHub using git_url and git_token, then deploys to Cloudflare Pages.</p>
-                <p>4. <code>/api/deploy/{repo_id}/domain</code> (GET): Retrieve the deployment domain for a repository.</p>
-                <p>5. <code>/api/logs</code> (GET): Retrieve recent server logs. Use <code>?project_id={repo_id}</code> to filter logs for a specific deployment.</p>
-                <p>6. <code>/api/health</code> (GET): Checks if the deployment server is running.</p>
-            </div>
-
-            <div class="endpoint">
-                <span class="endpoint-method post">POST</span>
-                <span class="endpoint-path">/api/deploy/{repo_id}</span>
-            </div>
-            <div class="endpoint">
-                <span class="endpoint-method get">GET</span>
-                <span class="endpoint-path">/api/repos</span>
-            </div>
-            <div class="endpoint">
-                <span class="endpoint-method get">GET</span>
-                <span class="endpoint-path">/api/repos/{username}</span>
-            </div>
-            <div class="endpoint">
-                <span class="endpoint-method get">GET</span>
-                <span class="endpoint-path">/api/deploy/{repo_id}/domain</span>
-            </div>
-            <div class="endpoint">
-                <span class="endpoint-method get">GET</span>
-                <span class="endpoint-path">/api/logs</span>
-            </div>
-            <div class="endpoint">
-                <span class="endpoint-method get">GET</span>
-                <span class="endpoint-path">/api/health</span>
-            </div>
-        </section>
-
-        <!-- Console Section -->
-        <section class="console-section">
-            <div class="console-header">
-                <div class="console-title">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="4 17 10 11 4 5"></polyline>
-                        <line x1="12" y1="19" x2="20" y2="19"></line>
-                    </svg>
-                    <h3>System Console</h3>
-                </div>
-                <div class="console-status">
-                    <span class="status-dot"></span>
-                    Live
-                </div>
-            </div>
-            <div class="console-window" id="consoleWindow">
-                <div class="console-content" id="consoleContent">
-                    <div class="log-entry system">> Initializing console connection...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Deploy Section -->
-        <section class="deploy-section">
-            <button class="deploy-button" id="deployBtn" onclick="triggerDeploy()">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-                </svg>
-                Deploy to Cloudflare
-            </button>
-            <div id="message" class="message"></div>
-        </section>
+  <nav>
+    <div class="nav-brand"><span>⚡</span> Sycord</div>
+    <div class="nav-status">
+      <div class="pulse-dot" id="navDot"></div>
+      <span id="navStatusText">M1 · Connecting…</span>
     </div>
+  </nav>
 
-    <script>
-        let selectedRepo = null;  // Will store {username, repo_id}
+  <main class="container">
+    <section class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Server Status</div>
+        <div class="stat-value" id="statStatus">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">—</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Repositories</div>
+        <div class="stat-value" id="statRepos">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Deployed Sites</div>
+        <div class="stat-value" id="statSites">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Server Host</div>
+        <div class="stat-value stat-host" id="statHost">—</div>
+      </div>
+    </section>
 
-        // Fetch repositories on page load
-        async function fetchRepositories() {
-            const repoList = document.getElementById('repoList');
-            const repoCount = document.getElementById('repoCount');
-            
-            try {
-                const response = await fetch('/api/repos');
-                const data = await response.json();
-                
-                if (data.success && Array.isArray(data.repositories) && data.repositories.length > 0) {
-                    repoCount.textContent = `${data.repositories.length} repos`;
-                    // Clear existing content
-                    repoList.innerHTML = '';
-                    
-                    // Use DOM manipulation for safe rendering
-                    data.repositories.forEach(repo => {
-                        if (repo) {
-                            const repoItem = createRepoItem(repo);
-                            repoList.appendChild(repoItem);
-                        }
-                    });
-                } else {
-                    repoCount.textContent = '0 repos';
-                    repoList.innerHTML = '';
-                    const loadingDiv = document.createElement('div');
-                    loadingDiv.className = 'loading-repos';
-                    const span = document.createElement('span');
-                    span.className = 'loading-text';
-                    span.textContent = 'No repositories found';
-                    loadingDiv.appendChild(span);
-                    repoList.appendChild(loadingDiv);
-                }
-            } catch (error) {
-                console.error('Error fetching repositories:', error);
-                repoCount.textContent = 'Error';
-                repoList.innerHTML = '';
-                const loadingDiv = document.createElement('div');
-                loadingDiv.className = 'loading-repos';
-                const span = document.createElement('span');
-                span.className = 'loading-text';
-                span.textContent = 'Failed to load repositories';
-                loadingDiv.appendChild(span);
-                repoList.appendChild(loadingDiv);
-            }
+    <div class="content-grid">
+      <div class="left-column">
+
+        <section class="card repos-card">
+          <div class="card-header">
+            <h2>📦 Repositories <span class="badge" id="repoBadge">0</span></h2>
+          </div>
+          <div class="card-body">
+            <input type="text" class="search-input" id="repoSearch" placeholder="Search repositories…">
+            <div class="repo-list" id="repoList">
+              <div class="empty-state">Loading repositories…</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card sites-card">
+          <div class="card-header">
+            <h2>🌐 Deployed Sites <span class="badge" id="siteBadge">0</span></h2>
+          </div>
+          <div class="card-body">
+            <div class="sites-grid" id="sitesGrid">
+              <div class="empty-state" style="grid-column:1/-1">Loading sites…</div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <div class="right-column">
+
+        <section class="card deploy-card">
+          <div class="card-header">
+            <h2>🚀 Deploy</h2>
+          </div>
+          <div class="card-body">
+            <div class="deploy-selection" id="deploySelection">
+              <span class="deploy-placeholder">Select a repository to deploy</span>
+            </div>
+            <button class="btn-deploy" id="deployBtn" disabled>Deploy</button>
+            <div class="deploy-result" id="deployResult"></div>
+          </div>
+        </section>
+
+        <section class="card console-card">
+          <div class="card-header">
+            <h2><div class="pulse-dot" style="margin-right:4px"></div> Console</h2>
+          </div>
+          <div class="console-body" id="consoleBody"></div>
+          <div class="auto-scroll-notice" id="autoScrollNotice">↓ New logs available — click to scroll down</div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <footer>Sycord Deployment Server · M1 Instance</footer>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const $$ = (s) => document.querySelectorAll(s);
+
+    let selectedRepo = null;
+    let autoScroll = true;
+    let previousLogCount = 0;
+    let deploying = false;
+
+    function relativeTime(dateStr) {
+      if (!dateStr) return '';
+      const now = Date.now();
+      const then = new Date(dateStr).getTime();
+      const diff = Math.max(0, Math.floor((now - then) / 1000));
+      if (diff < 60) return diff + 's ago';
+      if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return Math.floor(diff / 86400) + 'd ago';
+    }
+
+    function animateCount(el, target) {
+      const start = parseInt(el.textContent) || 0;
+      if (start === target) return;
+      const duration = 500;
+      const startTime = performance.now();
+      function tick(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = Math.round(start + (target - start) * eased);
+        if (progress < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    async function fetchHealth() {
+      try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+        $('#statusDot').className = 'dot green';
+        $('#statusText').textContent = 'Healthy';
+        $('#navDot').className = 'pulse-dot';
+        $('#navStatusText').textContent = 'M1 · Online';
+        $('#statHost').textContent = data.server_host || '—';
+        if (data.deployed_sites !== undefined) {
+          animateCount($('#statSites'), data.deployed_sites);
         }
+      } catch {
+        $('#statusDot').className = 'dot red';
+        $('#statusText').textContent = 'Offline';
+        $('#navDot').className = 'pulse-dot offline';
+        $('#navStatusText').textContent = 'M1 · Offline';
+      }
+    }
 
-        function createRepoItem(repo) {
-            const repoItem = document.createElement('div');
-            repoItem.className = 'repo-item';
-            repoItem.dataset.username = repo.username;
-            repoItem.dataset.repoId = repo.repo_id;
-            repoItem.onclick = function() { selectRepo(repo.username, repo.repo_id, this); };
-            
-            const repoItemInfo = document.createElement('div');
-            repoItemInfo.className = 'repo-item-info';
-            
-            const repoItemIcon = document.createElement('div');
-            repoItemIcon.className = 'repo-item-icon';
-            repoItemIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1 2v14h16V5H4z"/></svg>`;
-            
-            const repoDetails = document.createElement('div');
-            
-            const repoName = document.createElement('div');
-            repoName.className = 'repo-item-name';
-            repoName.textContent = repo.name || `repo-${repo.repo_id}`;
-            
-            const repoIdDisplay = document.createElement('div');
-            repoIdDisplay.className = 'repo-item-id';
-            repoIdDisplay.textContent = `${repo.username}/${repo.repo_id}`;
-            
-            repoDetails.appendChild(repoName);
-            repoDetails.appendChild(repoIdDisplay);
-            
-            repoItemInfo.appendChild(repoItemIcon);
-            repoItemInfo.appendChild(repoDetails);
-            
-            const selectBtn = document.createElement('div');
-            selectBtn.className = 'repo-select-btn';
-            
-            repoItem.appendChild(repoItemInfo);
-            repoItem.appendChild(selectBtn);
-            
-            return repoItem;
-        }
+    async function fetchRepos() {
+      try {
+        const res = await fetch('/api/repos');
+        const data = await res.json();
+        if (!data.success) return;
+        const repos = data.repositories || [];
+        animateCount($('#statRepos'), repos.length);
+        $('#repoBadge').textContent = repos.length;
+        renderRepos(repos);
+      } catch {
+        $('#repoList').innerHTML = '<div class="empty-state">Failed to load repositories</div>';
+      }
+    }
 
-        function selectRepo(username, repoId, element) {
-            // Deselect all items
-            document.querySelectorAll('.repo-item').forEach(item => {
-                item.classList.remove('selected');
-            });
-            
-            // Select clicked item
-            element.classList.add('selected');
-            selectedRepo = { username, repo_id: repoId };
-        }
+    function renderRepos(repos) {
+      const filter = ($('#repoSearch').value || '').toLowerCase();
+      const filtered = repos.filter(r => (r.full_name || r.name || '').toLowerCase().includes(filter));
+      const list = $('#repoList');
+      if (!filtered.length) {
+        list.innerHTML = '<div class="empty-state">' + (filter ? 'No matching repositories' : 'No repositories found') + '</div>';
+        return;
+      }
+      list.innerHTML = filtered.map(r => {
+        const isSelected = selectedRepo && selectedRepo.repo_id === r.repo_id;
+        return '<div class="repo-item' + (isSelected ? ' selected' : '') + '" data-id="' + r.repo_id + '">' +
+          '<div class="repo-icon">📁</div>' +
+          '<div class="repo-info">' +
+            '<div class="repo-name">' + escapeHtml(r.full_name || r.name) + '</div>' +
+            '<div class="repo-id">' + escapeHtml(String(r.repo_id)) + '</div>' +
+          '</div>' +
+          '<div class="repo-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
+        '</div>';
+      }).join('');
 
-        async function triggerDeploy() {
-            const button = document.getElementById('deployBtn');
-            const message = document.getElementById('message');
-            
-            if (!selectedRepo) {
-                message.className = 'message error show';
-                message.textContent = 'Please select a repository first';
-                return;
-            }
-            
-            button.disabled = true;
-            button.innerHTML = `
-                <div class="loading-spinner" style="width: 20px; height: 20px; border-width: 2px;"></div>
-                Deploying...
-            `;
-            message.className = 'message';
-            message.textContent = '';
-
-            try {
-                // Use deployment endpoint: /api/deploy/{repo_id}
-                const response = await fetch(`/api/deploy/${encodeURIComponent(selectedRepo.repo_id)}`, {
-                    method: 'POST'
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    message.className = 'message success show';
-                    message.textContent = data.message || 'Deployment successful!';
-                    if (data.url) {
-                         const link = document.createElement('a');
-                         link.href = data.url;
-                         link.target = '_blank';
-                         link.textContent = ' Visit Site';
-                         link.style.color = 'inherit';
-                         link.style.textDecoration = 'underline';
-                         link.style.marginLeft = '5px';
-                         message.appendChild(link);
-                    }
-                } else {
-                    message.className = 'message error show';
-                    message.textContent = data.message || 'Deployment failed';
-                    if (data.error) {
-                        message.textContent += ': ' + data.error;
-                    }
-                }
-            } catch (error) {
-                message.className = 'message error show';
-                message.textContent = 'Error: ' + error.message;
-            } finally {
-                button.disabled = false;
-                button.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-                    </svg>
-                    Deploy to Cloudflare
-                `;
-            }
-        }
-
-        function toggleApiDocs() {
-            const docs = document.getElementById('apiDocs');
-            docs.classList.toggle('show');
-        }
-
-        // Check server health on page load
-        async function checkHealth() {
-            try {
-                const response = await fetch('/api/health');
-                const data = await response.json();
-                console.log('Server health:', data);
-            } catch (error) {
-                console.error('Health check failed:', error);
-            }
-        }
-
-        // Console Logic
-        const consoleContent = document.getElementById('consoleContent');
-        let isAutoScroll = true;
-
-        // Poll logs every 2 seconds
-        setInterval(updateLogs, 2000);
-
-        // Initial fetch
-        updateLogs();
-
-        async function updateLogs() {
-             try {
-                 const projectId = selectedRepo ? selectedRepo.repo_id : '';
-                 const url = projectId ? `/api/logs?project_id=${projectId}` : '/api/logs';
-
-                 const response = await fetch(url);
-                 const data = await response.json();
-
-                 if (data.success && Array.isArray(data.logs)) {
-                     // We only want to update if there are logs.
-                     // Simple approach: clear and redraw.
-                     // Optimization: In a real app, we'd diff or only append new logs.
-                     // Given the limit is 200 logs, clearing and re-rendering is fast enough.
-
-                     // Store current scroll position if not auto-scrolling
-                     const currentScrollTop = consoleContent.scrollTop;
-
-                     consoleContent.innerHTML = '';
-
-                     if (data.logs.length === 0) {
-                         const line = document.createElement('div');
-                         line.className = 'log-entry system';
-                         line.textContent = '> No logs available yet...';
-                         consoleContent.appendChild(line);
-                     } else {
-                         data.logs.forEach(log => {
-                             if (!log) return;
-                             const line = document.createElement('div');
-                             line.className = 'log-entry';
-                             if (log.includes('[ERROR]')) {
-                                 line.classList.add('error');
-                             } else if (log.includes('[WARNING]')) {
-                                 line.classList.add('warning');
-                             }
-                             line.textContent = log;
-                             consoleContent.appendChild(line);
-                         });
-                     }
-
-                     if (isAutoScroll) {
-                         consoleContent.scrollTop = consoleContent.scrollHeight;
-                     } else {
-                         consoleContent.scrollTop = currentScrollTop;
-                     }
-                 }
-             } catch (e) {
-                 console.error('Failed to fetch logs', e);
-             }
-        }
-
-        // Handle scroll to stop auto-scrolling if user scrolls up
-        consoleContent.addEventListener('scroll', () => {
-            // value of scrollTop + clientHeight is approximately scrollHeight when at bottom
-            // We use a small buffer (10px) to determine if we are "at the bottom"
-            const atBottom = consoleContent.scrollHeight - consoleContent.scrollTop - consoleContent.clientHeight < 20;
-
-            if (atBottom) {
-                isAutoScroll = true;
-            } else {
-                // If the user scrolls up, disable auto-scroll
-                // However, we need to be careful. If we are replacing all content, scrollTop might jump.
-                // But for now, let's just say if the user manually moves away from bottom, we stop snapping.
-                isAutoScroll = false;
-            }
+      list.querySelectorAll('.repo-item').forEach(el => {
+        el.addEventListener('click', () => {
+          const id = el.dataset.id;
+          const repo = repos.find(r => String(r.repo_id) === id);
+          if (!repo) return;
+          selectRepo(repo);
+          renderRepos(repos);
         });
+      });
 
-        // Initialize
-        checkHealth();
-        fetchRepositories();
-    </script>
+      window._allRepos = repos;
+    }
+
+    function selectRepo(repo) {
+      selectedRepo = repo;
+      const sel = $('#deploySelection');
+      sel.innerHTML = '<div class="repo-icon">📁</div><div><div class="deploy-selected-name">' +
+        escapeHtml(repo.full_name || repo.name) +
+        '</div><div class="deploy-selected-id">' + escapeHtml(String(repo.repo_id)) + '</div></div>';
+      $('#deployBtn').disabled = false;
+      $('#deployResult').className = 'deploy-result';
+      $('#deployResult').style.display = 'none';
+    }
+
+    async function fetchSites() {
+      try {
+        const res = await fetch('/api/sites');
+        const data = await res.json();
+        if (!data.success) return;
+        const sites = data.sites || [];
+        animateCount($('#statSites'), data.total || sites.length);
+        $('#siteBadge').textContent = data.total || sites.length;
+        renderSites(sites);
+      } catch {
+        $('#sitesGrid').innerHTML = '<div class="empty-state" style="grid-column:1/-1">Failed to load sites</div>';
+      }
+    }
+
+    function renderSites(sites) {
+      const grid = $('#sitesGrid');
+      if (!sites.length) {
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No sites deployed yet</div>';
+        return;
+      }
+      grid.innerHTML = sites.map(s => {
+        const files = s.files !== undefined ? s.files + ' files' : '';
+        const time = relativeTime(s.deployed_at);
+        const url = s.url || s.local_url || '#';
+        return '<div class="site-card">' +
+          '<div class="site-name" title="' + escapeHtml(s.name) + '">' + escapeHtml(s.name) + '</div>' +
+          '<div class="site-meta">' +
+            (files ? '<span>' + files + '</span>' : '') +
+            (time ? '<span>' + time + '</span>' : '') +
+          '</div>' +
+          '<a class="site-visit" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">Visit ↗</a>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function fetchLogs() {
+      try {
+        const params = selectedRepo ? '?project_id=' + selectedRepo.repo_id + '&limit=200' : '?limit=200';
+        const res = await fetch('/api/logs' + params);
+        const data = await res.json();
+        if (!data.success) return;
+        const logs = data.logs || [];
+        if (logs.length === previousLogCount) return;
+        previousLogCount = logs.length;
+        renderLogs(logs);
+      } catch {}
+    }
+
+    function renderLogs(logs) {
+      const body = $('#consoleBody');
+      const wasAtBottom = autoScroll;
+      body.innerHTML = logs.map(line => {
+        let cls = 'log-line';
+        if (/\[ERROR\]/i.test(line)) cls += ' log-error';
+        else if (/\[WARN(ING)?\]/i.test(line)) cls += ' log-warning';
+        else cls += ' log-info';
+        return '<div class="' + cls + '">' + escapeHtml(line) + '</div>';
+      }).join('');
+      if (wasAtBottom) {
+        body.scrollTop = body.scrollHeight;
+      } else {
+        $('#autoScrollNotice').classList.add('show');
+      }
+    }
+
+    async function doDeploy() {
+      if (!selectedRepo || deploying) return;
+      deploying = true;
+      const btn = $('#deployBtn');
+      const result = $('#deployResult');
+      btn.className = 'btn-deploy loading';
+      btn.innerHTML = '<div class="spinner"></div> Deploying…';
+      btn.disabled = true;
+      result.className = 'deploy-result';
+      result.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/deploy/' + selectedRepo.repo_id, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          btn.className = 'btn-deploy success';
+          btn.innerHTML = '✓ Deployed';
+          result.className = 'deploy-result result-success show';
+          result.style.display = 'block';
+          let msg = escapeHtml(data.message || 'Deployment successful');
+          if (data.url) {
+            msg += '<br><a href="' + escapeHtml(data.url) + '" target="_blank" rel="noopener">' + escapeHtml(data.url) + '</a>';
+          }
+          result.innerHTML = msg;
+          fetchSites();
+          fetchHealth();
+        } else {
+          btn.className = 'btn-deploy error';
+          btn.innerHTML = '✗ Failed';
+          result.className = 'deploy-result result-error show';
+          result.style.display = 'block';
+          result.innerHTML = escapeHtml(data.message || 'Deployment failed');
+        }
+      } catch (err) {
+        btn.className = 'btn-deploy error';
+        btn.innerHTML = '✗ Error';
+        result.className = 'deploy-result result-error show';
+        result.style.display = 'block';
+        result.innerHTML = escapeHtml('Network error: ' + err.message);
+      }
+
+      setTimeout(() => {
+        btn.className = 'btn-deploy';
+        btn.innerHTML = 'Deploy';
+        btn.disabled = false;
+        deploying = false;
+      }, 3000);
+    }
+
+    function escapeHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    // Console auto-scroll
+    const consoleBody = $('#consoleBody');
+    consoleBody.addEventListener('scroll', () => {
+      const atBottom = consoleBody.scrollHeight - consoleBody.scrollTop - consoleBody.clientHeight < 30;
+      autoScroll = atBottom;
+      if (atBottom) $('#autoScrollNotice').classList.remove('show');
+    });
+    $('#autoScrollNotice').addEventListener('click', () => {
+      consoleBody.scrollTop = consoleBody.scrollHeight;
+      autoScroll = true;
+      $('#autoScrollNotice').classList.remove('show');
+    });
+
+    // Repo search
+    $('#repoSearch').addEventListener('input', () => {
+      if (window._allRepos) renderRepos(window._allRepos);
+    });
+
+    // Deploy button
+    $('#deployBtn').addEventListener('click', doDeploy);
+
+    // Init
+    fetchHealth();
+    fetchRepos();
+    fetchSites();
+    fetchLogs();
+
+    setInterval(fetchLogs, 2000);
+    setInterval(fetchSites, 10000);
+    setInterval(fetchHealth, 15000);
+  </script>
+
 </body>
 </html>
