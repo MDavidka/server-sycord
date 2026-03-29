@@ -127,6 +127,8 @@ MONGO_COLLECTION = os.getenv('MONGO_COLLECTION', 'users')
 CLOUDFLARE_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN')
 CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')
 CLOUDFLARE_PROJECT_NAME = os.getenv('CLOUDFLARE_PROJECT_NAME')
+CLOUDFLARE_ZONE_ID = os.getenv('CLOUDFLARE_ZONE_ID')
+CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'sycord.com')
 
 # API timeout configuration (in seconds)
 API_TIMEOUT = 30
@@ -600,6 +602,133 @@ def create_cloudflare_project(project_name):
             return None
     except requests.exceptions.RequestException as e:
         logger.error(f"Error creating Cloudflare project: {e}")
+        return None
+
+
+def create_cloudflare_dns_record(project_name, pages_domain):
+    """Create or update a Cloudflare DNS CNAME record pointing to a Cloudflare Pages domain.
+
+    Creates a proxied CNAME record: <project_name>.<CLOUDFLARE_DOMAIN> -> <pages_domain>
+    Returns a dict with 'subdomain' and 'url' on success, or None on failure.
+    """
+    if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ZONE_ID:
+        logger.error("Cloudflare API token or zone ID not configured for DNS record creation")
+        return None
+
+    subdomain = f"{project_name}.{CLOUDFLARE_DOMAIN}"
+    records_url = f'https://api.cloudflare.com/client/v4/zones/{CLOUDFLARE_ZONE_ID}/dns_records'
+    headers = {
+        'Authorization': f'Bearer {CLOUDFLARE_API_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+
+    try:
+        # Check whether a CNAME already exists for this subdomain
+        list_response = requests.get(
+            records_url,
+            headers=headers,
+            params={'type': 'CNAME', 'name': subdomain},
+            timeout=API_TIMEOUT
+        )
+        list_data = list_response.json()
+        existing_records = list_data.get('result', [])
+
+        payload = {
+            'type': 'CNAME',
+            'name': subdomain,
+            'content': pages_domain,
+            'ttl': 1,       # 1 = automatic TTL (recommended for proxied records)
+            'proxied': True
+        }
+
+        if existing_records:
+            # Update the existing record
+            record_id = existing_records[0]['id']
+            response = requests.put(
+                f'{records_url}/{record_id}',
+                headers=headers,
+                json=payload,
+                timeout=API_TIMEOUT
+            )
+            action = 'Updated'
+        else:
+            # Create a new record
+            response = requests.post(
+                records_url,
+                headers=headers,
+                json=payload,
+                timeout=API_TIMEOUT
+            )
+            action = 'Created'
+
+        if response.status_code in [200, 201]:
+            result = response.json()
+            if result.get('success'):
+                logger.info(f"{action} DNS record: {subdomain} -> {pages_domain}")
+                return {
+                    'success': True,
+                    'subdomain': subdomain,
+                    'url': f"https://{subdomain}"
+                }
+            else:
+                logger.error(f"Cloudflare DNS API error: {result.get('errors')}")
+                return None
+        else:
+            logger.error(f"Cloudflare DNS API error: {response.status_code} - {response.text}")
+            return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error creating Cloudflare DNS record: {e}")
+        return None
+
+
+def add_custom_domain_to_pages(project_name, custom_domain):
+    """Register a custom domain on a Cloudflare Pages project.
+
+    This tells Cloudflare Pages to serve the project at the given custom domain
+    (in addition to the default *.pages.dev URL).
+    Returns the API result dict on success, or None on failure.
+    """
+    if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ACCOUNT_ID:
+        logger.error("Cloudflare credentials not configured for custom domain attachment")
+        return None
+
+    headers = {
+        'Authorization': f'Bearer {CLOUDFLARE_API_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+    url = (
+        f'https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}'
+        f'/pages/projects/{project_name}/domains'
+    )
+
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json={'name': custom_domain},
+            timeout=API_TIMEOUT
+        )
+
+        if response.status_code in [200, 201]:
+            result = response.json()
+            if result.get('success'):
+                logger.info(f"Added custom domain '{custom_domain}' to Pages project '{project_name}'")
+                return result.get('result')
+            else:
+                errors = result.get('errors', [])
+                # Code 7003 means the domain is already attached
+                if any(e.get('code') == 7003 for e in errors):
+                    logger.info(f"Custom domain '{custom_domain}' already attached to '{project_name}'")
+                    return {'name': custom_domain}
+                logger.error(f"Cloudflare Pages domain API error: {errors}")
+                return None
+        else:
+            logger.error(
+                f"Cloudflare Pages domain API error: {response.status_code} - {response.text}"
+            )
+            return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error adding custom domain to Pages project: {e}")
         return None
 
 
@@ -1521,6 +1650,179 @@ def health():
         'service': 'M1 Instance - Sycord Deployment Server',
         'instance': 'M1'
     }), 200
+
+
+@app.route('/deploy', methods=['GET', 'POST'])
+def deploy_with_dns():
+    """Deployment endpoint that builds a Vite project from a GitHub repo,
+    deploys it to Cloudflare Pages, and creates a Cloudflare DNS record so
+    the project is reachable at <project>.<CLOUDFLARE_DOMAIN>.
+
+    Accepts GET query-string parameters or a POST JSON body:
+      repo_id   (numeric str) – Numeric repository ID stored in MongoDB.  When
+                         provided the server looks up git_url and git_token
+                         automatically.  Mutually exclusive with the direct
+                         git_url / git_token fields below.
+      git_url   (str)  – Full GitHub repository URL, e.g.
+                         https://github.com/owner/repo
+      git_token (str)  – GitHub personal access token with repo read access.
+      subdomain (str)  – Optional. Overrides the Cloudflare project/subdomain
+                         name (defaults to the sanitised repo name).
+
+    Success response:
+    {
+        "success": true,
+        "message": "Deployment successful! Project: <name>",
+        "project_name": "<name>",
+        "pages_url": "https://<name>.pages.dev",
+        "custom_url": "https://<name>.<CLOUDFLARE_DOMAIN>",  // null when CLOUDFLARE_ZONE_ID not set
+        "dns_record_created": true,
+        "output": "<wrangler stdout>"
+    }
+    """
+    project_id_for_debug = None
+    try:
+        logger.info("Received deployment request at /deploy")
+
+        # Accept parameters from GET query string or POST JSON body
+        if request.method == 'GET':
+            data = request.args.to_dict()
+        else:
+            data = request.get_json() or {}
+
+        repo_id = data.get('repo_id')
+        git_url = data.get('git_url')
+        git_token = data.get('git_token')
+        custom_subdomain = data.get('subdomain')
+
+        # --- Option A: look up repo config from MongoDB using repo_id ---
+        if repo_id:
+            repo_id = str(repo_id)
+            if not re.match(r'^\d+$', repo_id):
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid repo_id format. Expected numeric identifier.'
+                }), 400
+
+            repo_doc = get_repo_by_id(repo_id)
+            project_id_for_debug = repo_doc.get('project_id') if repo_doc else None
+
+            if not repo_doc:
+                return jsonify({
+                    'success': False,
+                    'message': f'Repository {repo_id} not found'
+                }), 404
+
+            git_token = repo_doc.get('git_token')
+            git_url = repo_doc.get('git_url')
+
+        # --- Validate required fields ---
+        if not git_url:
+            return jsonify({
+                'success': False,
+                'message': (
+                    'git_url is required '
+                    '(or provide a repo_id to look up from the database)'
+                )
+            }), 400
+
+        if not git_token:
+            return jsonify({
+                'success': False,
+                'message': (
+                    'git_token is required '
+                    '(or provide a repo_id to look up from the database)'
+                )
+            }), 400
+
+        # --- Parse the GitHub URL ---
+        owner, repo_name = parse_git_url(git_url)
+        if not owner or not repo_name:
+            return jsonify({
+                'success': False,
+                'message': f'Could not parse git_url: {git_url}'
+            }), 400
+
+        repo_full_name = f"{owner}/{repo_name}"
+        cf_project_name = sanitize_project_name(custom_subdomain or repo_name)
+
+        # Set logging context
+        tag = build_project_tag(repo_id or repo_name)
+        log_token = current_project_tag.set(tag)
+
+        try:
+            # 1. Ensure the Cloudflare Pages project exists
+            create_cloudflare_project(cf_project_name)
+
+            # 2. Download repository from GitHub
+            temp_dir = download_github_repo(git_token, repo_full_name, 'main')
+
+            if not temp_dir:
+                return deployment_error_response(
+                    'Failed to download repository from GitHub',
+                    status_code=500,
+                    project_id=project_id_for_debug
+                )
+
+            try:
+                # 3. Build and deploy to Cloudflare Pages
+                result = deploy_to_cloudflare_pages(temp_dir, cf_project_name)
+
+                if not result['success']:
+                    return deployment_error_response(
+                        'Deployment to Cloudflare Pages failed',
+                        error=result.get('error'),
+                        status_code=500,
+                        project_id=project_id_for_debug
+                    )
+
+                pages_url = result.get('url') or f"https://{cf_project_name}.pages.dev"
+                # Extract the bare hostname for the CNAME record content
+                pages_domain = pages_url.replace('https://', '').replace('http://', '').rstrip('/')
+
+                # 4. Create a Cloudflare DNS CNAME record and attach the custom
+                #    domain to the Pages project (skipped when CLOUDFLARE_ZONE_ID
+                #    is not configured)
+                dns_result = None
+                custom_url = None
+
+                if CLOUDFLARE_ZONE_ID:
+                    dns_result = create_cloudflare_dns_record(cf_project_name, pages_domain)
+                    if dns_result:
+                        custom_url = dns_result.get('url')
+                        custom_domain_name = dns_result.get('subdomain')
+                        # Tell Cloudflare Pages about the custom domain so it
+                        # serves SSL and routes traffic correctly
+                        add_custom_domain_to_pages(cf_project_name, custom_domain_name)
+                else:
+                    logger.warning(
+                        "CLOUDFLARE_ZONE_ID not set – skipping DNS record creation"
+                    )
+
+                return jsonify({
+                    'success': True,
+                    'message': f'Deployment successful! Project: {cf_project_name}',
+                    'project_name': cf_project_name,
+                    'pages_url': pages_url,
+                    'custom_url': custom_url,
+                    'dns_record_created': dns_result is not None,
+                    'output': result.get('output')
+                }), 200
+
+            finally:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                logger.info(f"Cleaned up temporary directory: {temp_dir}")
+        finally:
+            current_project_tag.reset(log_token)
+
+    except Exception as e:
+        logger.error(f"Deploy error: {e}")
+        return deployment_error_response(
+            'Deployment failed',
+            error=str(e),
+            status_code=500,
+            project_id=project_id_for_debug
+        )
 
 
 if __name__ == '__main__':
