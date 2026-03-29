@@ -1065,10 +1065,10 @@ def deploy_to_sycord(directory_path, project_name):
         # Target directory for this deployment
         target_dir = os.path.join(DEPLOYMENTS_DIR, project_name)
 
-        # Verify the resolved path is within DEPLOYMENTS_DIR
+        # Verify the resolved path is within DEPLOYMENTS_DIR (not equal to it)
         real_target = os.path.realpath(target_dir)
         real_deployments = os.path.realpath(DEPLOYMENTS_DIR)
-        if not real_target.startswith(real_deployments + os.sep) and real_target != real_deployments:
+        if not real_target.startswith(real_deployments + os.sep):
             logger.error(f"Rejected deployment target outside deployments directory: {project_name}")
             return {
                 'success': False,
@@ -1281,7 +1281,7 @@ def serve_site(project_name, filename='index.html'):
 
     file_path = os.path.join(site_dir, filename)
     real_file = os.path.realpath(file_path)
-    if not real_file.startswith(real_site):
+    if not real_file.startswith(real_site + os.sep) and real_file != real_site:
         return jsonify({'error': 'Access denied'}), 403
 
     if os.path.isfile(file_path):
@@ -1645,7 +1645,7 @@ def get_deployment_domain(repo_id):
             }), 404
 
         project_name = sanitize_project_name(repo_name)
-        domain = f"https://{project_name}.{CLOUDFLARE_DOMAIN}"
+        domain = f"https://{project_name}.{CLOUDFLARE_DOMAIN}" if CLOUDFLARE_ZONE_ID else None
         local_url = f"/sites/{project_name}/"
 
         return jsonify({
@@ -1657,6 +1657,7 @@ def get_deployment_domain(repo_id):
             'project_name': project_name,
             'domain': domain,
             'local_url': local_url,
+            'dns_configured': bool(CLOUDFLARE_ZONE_ID),
             'git_url': git_url
         }), 200
     except Exception as e:

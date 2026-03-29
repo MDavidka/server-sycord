@@ -703,14 +703,17 @@
       grid.innerHTML = sites.map(s => {
         const files = s.files !== undefined ? s.files + ' files' : '';
         const time = relativeTime(s.deployed_at);
-        const url = s.url || s.local_url || '#';
+        const url = s.url || s.local_url || '';
+        const visitLink = url
+          ? '<a class="site-visit" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">Visit ↗</a>'
+          : '<span class="site-visit" style="opacity:0.4;cursor:default">Pending DNS</span>';
         return '<div class="site-card">' +
           '<div class="site-name" title="' + escapeHtml(s.name) + '">' + escapeHtml(s.name) + '</div>' +
           '<div class="site-meta">' +
             (files ? '<span>' + files + '</span>' : '') +
             (time ? '<span>' + time + '</span>' : '') +
           '</div>' +
-          '<a class="site-visit" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">Visit ↗</a>' +
+          visitLink +
         '</div>';
       }).join('');
     }
@@ -766,8 +769,9 @@
           result.className = 'deploy-result result-success show';
           result.style.display = 'block';
           let msg = escapeHtml(data.message || 'Deployment successful');
-          if (data.url) {
-            msg += '<br><a href="' + escapeHtml(data.url) + '" target="_blank" rel="noopener">' + escapeHtml(data.url) + '</a>';
+          const deployUrl = data.url || data.local_url;
+          if (deployUrl) {
+            msg += '<br><a href="' + escapeHtml(deployUrl) + '" target="_blank" rel="noopener">' + escapeHtml(deployUrl) + '</a>';
           }
           result.innerHTML = msg;
           fetchSites();
@@ -797,9 +801,12 @@
 
     function escapeHtml(str) {
       if (str == null) return '';
-      const d = document.createElement('div');
-      d.textContent = str;
-      return d.innerHTML;
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     // Console auto-scroll
