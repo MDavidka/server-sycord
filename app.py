@@ -7,7 +7,8 @@ import requests
 import json
 from collections import deque
 from threading import Lock
-from flask import Flask, render_template, request, jsonify
+from datetime import datetime
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from pymongo import MongoClient
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -127,15 +128,22 @@ MONGO_COLLECTION = os.getenv('MONGO_COLLECTION', 'users')
 CLOUDFLARE_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN')
 CLOUDFLARE_ACCOUNT_ID = os.getenv('CLOUDFLARE_ACCOUNT_ID')
 CLOUDFLARE_PROJECT_NAME = os.getenv('CLOUDFLARE_PROJECT_NAME')
+CLOUDFLARE_ZONE_ID = os.getenv('CLOUDFLARE_ZONE_ID')
+CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'sycord.com')
 
 # API timeout configuration (in seconds)
 API_TIMEOUT = 30
 DOWNLOAD_TIMEOUT = 120
 BUILD_TIMEOUT = 300  # 5 minutes timeout for npm install/build
 
+# Local deployment configuration
+DEPLOYMENTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'deployments')
+SERVER_HOST = os.getenv('SERVER_HOST', 'micro1.sycord.com')
+os.makedirs(DEPLOYMENTS_DIR, exist_ok=True)
+
 
 def sanitize_project_name(name):
-    """Sanitize a repository name for use as a Cloudflare project name"""
+    """Sanitize a repository name for use as a deployment project name."""
     if not name:
         return 'unnamed-project'
     # Replace any non-alphanumeric characters (except hyphens) with hyphens
@@ -603,6 +611,133 @@ def create_cloudflare_project(project_name):
         return None
 
 
+def create_cloudflare_dns_record(project_name, pages_domain):
+    """Create or update a Cloudflare DNS CNAME record pointing to a Cloudflare Pages domain.
+
+    Creates a proxied CNAME record: <project_name>.<CLOUDFLARE_DOMAIN> -> <pages_domain>
+    Returns a dict with 'subdomain' and 'url' on success, or None on failure.
+    """
+    if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ZONE_ID:
+        logger.error("Cloudflare API token or zone ID not configured for DNS record creation")
+        return None
+
+    subdomain = f"{project_name}.{CLOUDFLARE_DOMAIN}"
+    records_url = f'https://api.cloudflare.com/client/v4/zones/{CLOUDFLARE_ZONE_ID}/dns_records'
+    headers = {
+        'Authorization': f'Bearer {CLOUDFLARE_API_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+
+    try:
+        # Check whether a CNAME already exists for this subdomain
+        list_response = requests.get(
+            records_url,
+            headers=headers,
+            params={'type': 'CNAME', 'name': subdomain},
+            timeout=API_TIMEOUT
+        )
+        list_data = list_response.json()
+        existing_records = list_data.get('result', [])
+
+        payload = {
+            'type': 'CNAME',
+            'name': subdomain,
+            'content': pages_domain,
+            'ttl': 1,       # 1 = automatic TTL (recommended for proxied records)
+            'proxied': True
+        }
+
+        if existing_records:
+            # Update the existing record
+            record_id = existing_records[0]['id']
+            response = requests.put(
+                f'{records_url}/{record_id}',
+                headers=headers,
+                json=payload,
+                timeout=API_TIMEOUT
+            )
+            action = 'Updated'
+        else:
+            # Create a new record
+            response = requests.post(
+                records_url,
+                headers=headers,
+                json=payload,
+                timeout=API_TIMEOUT
+            )
+            action = 'Created'
+
+        if response.status_code in [200, 201]:
+            result = response.json()
+            if result.get('success'):
+                logger.info(f"{action} DNS record: {subdomain} -> {pages_domain}")
+                return {
+                    'success': True,
+                    'subdomain': subdomain,
+                    'url': f"https://{subdomain}"
+                }
+            else:
+                logger.error(f"Cloudflare DNS API error: {result.get('errors')}")
+                return None
+        else:
+            logger.error(f"Cloudflare DNS API error: {response.status_code} - {response.text}")
+            return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error creating Cloudflare DNS record: {e}")
+        return None
+
+
+def add_custom_domain_to_pages(project_name, custom_domain):
+    """Register a custom domain on a Cloudflare Pages project.
+
+    This tells Cloudflare Pages to serve the project at the given custom domain
+    (in addition to the default *.pages.dev URL).
+    Returns the API result dict on success, or None on failure.
+    """
+    if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ACCOUNT_ID:
+        logger.error("Cloudflare credentials not configured for custom domain attachment")
+        return None
+
+    headers = {
+        'Authorization': f'Bearer {CLOUDFLARE_API_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+    url = (
+        f'https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}'
+        f'/pages/projects/{project_name}/domains'
+    )
+
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json={'name': custom_domain},
+            timeout=API_TIMEOUT
+        )
+
+        if response.status_code in [200, 201]:
+            result = response.json()
+            if result.get('success'):
+                logger.info(f"Added custom domain '{custom_domain}' to Pages project '{project_name}'")
+                return result.get('result')
+            else:
+                errors = result.get('errors', [])
+                # Code 7003 means the domain is already attached
+                if any(e.get('code') == 7003 for e in errors):
+                    logger.info(f"Custom domain '{custom_domain}' already attached to '{project_name}'")
+                    return {'name': custom_domain}
+                logger.error(f"Cloudflare Pages domain API error: {errors}")
+                return None
+        else:
+            logger.error(
+                f"Cloudflare Pages domain API error: {response.status_code} - {response.text}"
+            )
+            return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error adding custom domain to Pages project: {e}")
+        return None
+
+
 def fix_commonjs_config_files(directory_path):
     """
     Check for CommonJS config files in an ESM project and rename them to .cjs.
@@ -903,6 +1038,79 @@ def deploy_to_cloudflare_pages(directory_path, project_name):
         }
 
 
+def deploy_to_sycord(directory_path, project_name):
+    """Deploy files to the local Sycord server.
+
+    For Vite/Node.js projects this function will:
+    1. Build the project (npm install + npm run build)
+    2. Copy the build output to the local deployments directory
+    3. Return the deployment URL
+    """
+    try:
+        # Build the project if it's a Vite/Node.js project
+        build_result = build_vite_project(directory_path)
+
+        if not build_result['success']:
+            return {
+                'success': False,
+                'output': None,
+                'url': None,
+                'error': build_result['error']
+            }
+
+        # Use the dist folder if built, otherwise use the original directory
+        deploy_path = build_result['deploy_path']
+        logger.info(f"Deploying from: {deploy_path}")
+
+        # Target directory for this deployment
+        target_dir = os.path.join(DEPLOYMENTS_DIR, project_name)
+
+        # Verify the resolved path is within DEPLOYMENTS_DIR (not equal to it)
+        real_target = os.path.realpath(target_dir)
+        real_deployments = os.path.realpath(DEPLOYMENTS_DIR)
+        if not real_target.startswith(real_deployments + os.sep):
+            logger.error(f"Rejected deployment target outside deployments directory: {project_name}")
+            return {
+                'success': False,
+                'output': None,
+                'url': None,
+                'error': 'Invalid project name'
+            }
+
+        # Remove old deployment if it exists
+        if os.path.exists(target_dir):
+            shutil.rmtree(target_dir)
+            logger.info(f"Removed previous deployment: {target_dir}")
+
+        # Copy build output to deployments directory
+        shutil.copytree(deploy_path, target_dir)
+
+        # Count deployed files
+        file_count = sum(len(files) for _, _, files in os.walk(target_dir))
+        logger.info(f"Deployed {file_count} files to {target_dir}")
+
+        # Build the URLs
+        url = f"https://{project_name}.{CLOUDFLARE_DOMAIN}"
+        local_url = f"/sites/{project_name}/"
+
+        return {
+            'success': True,
+            'output': f'Deployed {file_count} files to sycord server ({project_name})',
+            'url': url,
+            'local_url': local_url,
+            'error': None
+        }
+
+    except Exception as e:
+        logger.error(f"Sycord deployment error: {e}")
+        return {
+            'success': False,
+            'output': None,
+            'url': None,
+            'error': str(e)
+        }
+
+
 def retrieve_files_from_mongo():
     """Retrieve files from MongoDB"""
     try:
@@ -1051,8 +1259,60 @@ def deploy_to_cloudflare(directory_path):
 
 @app.route('/')
 def index():
-    """Render the main waiting page"""
+    """Render the main deployment dashboard"""
     return render_template('index.html')
+
+
+@app.route('/sites/<project_name>/')
+@app.route('/sites/<project_name>/<path:filename>')
+def serve_site(project_name, filename='index.html'):
+    """Serve static files from deployed sites with SPA fallback."""
+    safe_name = sanitize_project_name(project_name)
+    site_dir = os.path.join(DEPLOYMENTS_DIR, safe_name)
+
+    # Verify the site directory exists and is within DEPLOYMENTS_DIR
+    real_site = os.path.realpath(site_dir)
+    real_deployments = os.path.realpath(DEPLOYMENTS_DIR)
+    if not real_site.startswith(real_deployments + os.sep):
+        return jsonify({'error': 'Access denied'}), 403
+
+    if not os.path.isdir(site_dir):
+        return jsonify({'error': 'Site not found'}), 404
+
+    file_path = os.path.join(site_dir, filename)
+    real_file = os.path.realpath(file_path)
+    if not real_file.startswith(real_site + os.sep) and real_file != real_site:
+        return jsonify({'error': 'Access denied'}), 403
+
+    if os.path.isfile(file_path):
+        return send_from_directory(site_dir, filename)
+
+    # SPA fallback: serve index.html for unmatched paths
+    return send_from_directory(site_dir, 'index.html')
+
+
+@app.route('/api/sites', methods=['GET'])
+def list_sites():
+    """API endpoint to list all deployed sites on this server."""
+    sites = []
+    if os.path.exists(DEPLOYMENTS_DIR):
+        for name in sorted(os.listdir(DEPLOYMENTS_DIR)):
+            site_path = os.path.join(DEPLOYMENTS_DIR, name)
+            if os.path.isdir(site_path):
+                file_count = sum(len(files) for _, _, files in os.walk(site_path))
+                mtime = os.path.getmtime(site_path)
+                sites.append({
+                    'name': name,
+                    'url': f"https://{name}.{CLOUDFLARE_DOMAIN}",
+                    'local_url': f"/sites/{name}/",
+                    'files': file_count,
+                    'deployed_at': datetime.fromtimestamp(mtime).isoformat()
+                })
+    return jsonify({
+        'success': True,
+        'sites': sites,
+        'total': len(sites)
+    }), 200
 
 
 @app.route('/api/logs', methods=['GET', 'OPTIONS'])
@@ -1211,33 +1471,33 @@ def get_user_repos_endpoint(username):
 def deploy_by_repo(repo_id):
     """
     API endpoint to trigger deployment for a specific repository by repo_id.
-    
+
     URL: GET/POST /api/deploy/<repo_id>
-    
+
     Parameters:
     - repo_id: Repository identifier (numeric string)
-    
+
     The endpoint retrieves repository details from the database:
     - git_url: GitHub repository URL
     - git_token: GitHub personal access token for authentication
-    
+
     Process:
     1. Validate repo_id
     2. Retrieve repository configuration from database
     3. Download repository from GitHub using git_token
-    4. Deploy to Cloudflare Pages
+    4. Build and deploy to sycord server
     5. Return deployment result with URL
-    
+
     Response format (success):
     {
         "success": true,
         "message": "Deployment successful! Project: repo-name",
         "project_name": "repo-name",
-        "url": "https://repo-name.pages.dev",
+        "url": "https://repo-name.sycord.com",
         "username": "user1",
         "repo_id": "12345"
     }
-    
+
     Response format (error):
     {
         "success": false,
@@ -1248,64 +1508,60 @@ def deploy_by_repo(repo_id):
     project_id_for_debug = None
     try:
         logger.info(f"Received deployment request for repo_id={repo_id}")
-        
+
         # Validate repo_id format (should be numeric string)
-        # repo_id comes from URL path, so it's already a string
         if not repo_id or not re.match(r'^\d+$', repo_id):
             return jsonify({
                 'success': False,
                 'message': 'Invalid repo_id format. Expected numeric identifier.'
             }), 400
-        
+
         # Get repository details from MongoDB (new structure)
         repo_doc = get_repo_by_id(repo_id)
         project_id_for_debug = repo_doc.get('project_id') if repo_doc else None
-        
+
         if not repo_doc:
             return jsonify({
                 'success': False,
                 'message': f'Repository {repo_id} not found'
             }), 404
-        
+
         git_token = repo_doc.get('git_token')
         git_url = repo_doc.get('git_url')
         username = repo_doc.get('username')
-        
+
         if not git_token:
             return jsonify({
                 'success': False,
                 'message': 'GitHub token (git_token) not found for repository'
             }), 404
-        
+
         if not git_url:
             return jsonify({
                 'success': False,
                 'message': 'Git URL (git_url) not found for repository'
             }), 404
-        
+
         # Parse git_url to extract owner and repo name
         owner, repo_name = parse_git_url(git_url)
-        
+
         if not owner or not repo_name:
             return jsonify({
                 'success': False,
                 'message': f'Could not parse git_url: {git_url}'
             }), 400
-        
+
         repo_full_name = f"{owner}/{repo_name}"
-        default_branch = 'main'  # Default branch
-        
-        # Generate Cloudflare project name from repo name (sanitized)
-        cf_project_name = sanitize_project_name(repo_name)
-        
+        default_branch = 'main'
+
+        # Generate project name from repo name (sanitized)
+        project_name = sanitize_project_name(repo_name)
+
         # Set context for logging
         tag = build_project_tag(repo_id)
         token = current_project_tag.set(tag)
-        
+
         try:
-            # Create Cloudflare project if it doesn't exist
-            create_cloudflare_project(cf_project_name)
-            
             # Download repository from GitHub
             temp_dir = download_github_repo(git_token, repo_full_name, default_branch)
 
@@ -1317,15 +1573,16 @@ def deploy_by_repo(repo_id):
                 )
 
             try:
-                # Deploy to Cloudflare Pages
-                result = deploy_to_cloudflare_pages(temp_dir, cf_project_name)
+                # Build and deploy to sycord server
+                result = deploy_to_sycord(temp_dir, project_name)
 
                 if result['success']:
                     return jsonify({
                         'success': True,
-                        'message': f'Deployment successful! Project: {cf_project_name}',
-                        'project_name': cf_project_name,
+                        'message': f'Deployment successful! Project: {project_name}',
+                        'project_name': project_name,
                         'url': result.get('url'),
+                        'local_url': result.get('local_url'),
                         'username': username,
                         'repo_id': repo_id,
                         'output': result['output']
@@ -1343,7 +1600,7 @@ def deploy_by_repo(repo_id):
                 logger.info(f"Cleaned up temporary directory: {temp_dir}")
         finally:
             current_project_tag.reset(token)
-    
+
     except Exception as e:
         logger.error(f"Deployment error: {e}")
         return deployment_error_response(
@@ -1388,7 +1645,8 @@ def get_deployment_domain(repo_id):
             }), 404
 
         project_name = sanitize_project_name(repo_name)
-        domain = f"https://{project_name}.pages.dev"
+        domain = f"https://{project_name}.{CLOUDFLARE_DOMAIN}" if CLOUDFLARE_ZONE_ID else None
+        local_url = f"/sites/{project_name}/"
 
         return jsonify({
             'success': True,
@@ -1398,6 +1656,8 @@ def get_deployment_domain(repo_id):
             'repo_name': repo_name,
             'project_name': project_name,
             'domain': domain,
+            'local_url': local_url,
+            'dns_configured': bool(CLOUDFLARE_ZONE_ID),
             'git_url': git_url
         }), 200
     except Exception as e:
@@ -1415,58 +1675,55 @@ def deploy():
     project_id_for_debug = None
     try:
         logger.info("Received deployment request")
-        
+
         # Get request data
         data = request.get_json() or {}
         repo_id = data.get('repo_id')
-        
+
         if not repo_id:
             return jsonify({
                 'success': False,
                 'message': 'Repository ID is required'
             }), 400
-        
+
         # Get repository details from MongoDB
         selected_repo = get_repository_document_by_id(repo_id, include_tokens=True)
         project_id_for_debug = selected_repo.get('project_id') if selected_repo else None
-        
+
         if not selected_repo:
             return jsonify({
                 'success': False,
                 'message': 'Repository configuration not found'
             }), 404
-        
+
         github_token = get_repository_token(selected_repo)
-        
+
         if not github_token:
             return jsonify({
                 'success': False,
                 'message': 'GitHub token not found for repository'
             }), 404
-        
+
         owner = selected_repo.get('owner')
         repo_name = get_repository_name(selected_repo)
-        
+
         if not owner or not repo_name:
             return jsonify({
                 'success': False,
                 'message': 'Repository configuration missing owner or name'
             }), 400
-        
+
         default_branch = selected_repo.get('default_branch', 'main')
         repo_full_name = f"{owner}/{repo_name}"
-        
-        # Generate Cloudflare project name from repo name (sanitized)
-        cf_project_name = sanitize_project_name(repo_name)
-        
+
+        # Generate project name from repo name (sanitized)
+        project_name = sanitize_project_name(repo_name)
+
         # Set context for logging
         tag = build_project_tag(repo_id)
         token = current_project_tag.set(tag)
 
         try:
-            # Create Cloudflare project if it doesn't exist
-            create_cloudflare_project(cf_project_name)
-            
             # Download repository from GitHub
             temp_dir = download_github_repo(github_token, repo_full_name, default_branch)
 
@@ -1478,15 +1735,16 @@ def deploy():
                 )
 
             try:
-                # Deploy to Cloudflare Pages
-                result = deploy_to_cloudflare_pages(temp_dir, cf_project_name)
+                # Build and deploy to sycord server
+                result = deploy_to_sycord(temp_dir, project_name)
 
                 if result['success']:
                     return jsonify({
                         'success': True,
-                        'message': f'Deployment successful! Project: {cf_project_name}',
-                        'project_name': cf_project_name,
+                        'message': f'Deployment successful! Project: {project_name}',
+                        'project_name': project_name,
                         'url': result.get('url'),
+                        'local_url': result.get('local_url'),
                         'output': result['output']
                     }), 200
                 else:
@@ -1502,7 +1760,7 @@ def deploy():
                 logger.info(f"Cleaned up temporary directory: {temp_dir}")
         finally:
             current_project_tag.reset(token)
-    
+
     except Exception as e:
         logger.error(f"Deployment error: {e}")
         return deployment_error_response(
@@ -1516,28 +1774,200 @@ def deploy():
 @app.route('/api/health', methods=['GET'])
 def health():
     """Health check endpoint"""
+    deployed_count = 0
+    if os.path.exists(DEPLOYMENTS_DIR):
+        deployed_count = sum(
+            1 for n in os.listdir(DEPLOYMENTS_DIR)
+            if os.path.isdir(os.path.join(DEPLOYMENTS_DIR, n))
+        )
     return jsonify({
         'status': 'healthy',
-        'service': 'M1 Instance - Sycord Deployment Server',
-        'instance': 'M1'
+        'service': 'Sycord Deployment Server',
+        'instance': 'M1',
+        'server_host': SERVER_HOST,
+        'deployed_sites': deployed_count
     }), 200
+
+
+@app.route('/deploy', methods=['GET', 'POST'])
+def deploy_with_dns():
+    """Deployment endpoint that builds a Vite project from a GitHub repo,
+    deploys it to the sycord server, and creates a Cloudflare DNS CNAME
+    record so the project is reachable at <project>.<CLOUDFLARE_DOMAIN>.
+
+    Accepts GET query-string parameters or a POST JSON body:
+      repo_id   (numeric str) – Numeric repository ID stored in MongoDB.  When
+                         provided the server looks up git_url and git_token
+                         automatically.  Mutually exclusive with the direct
+                         git_url / git_token fields below.
+      git_url   (str)  – Full GitHub repository URL, e.g.
+                         https://github.com/owner/repo
+      git_token (str)  – GitHub personal access token with repo read access.
+      subdomain (str)  – Optional. Overrides the project/subdomain name
+                         (defaults to the sanitised repo name).
+
+    Success response:
+    {
+        "success": true,
+        "message": "Deployment successful! Project: <name>",
+        "project_name": "<name>",
+        "url": "https://<name>.<CLOUDFLARE_DOMAIN>",
+        "local_url": "/sites/<name>/",
+        "custom_url": "https://<name>.<CLOUDFLARE_DOMAIN>",
+        "dns_record_created": true,
+        "output": "..."
+    }
+    """
+    project_id_for_debug = None
+    try:
+        logger.info("Received deployment request at /deploy")
+
+        # Accept parameters from GET query string or POST JSON body
+        if request.method == 'GET':
+            data = request.args.to_dict()
+        else:
+            data = request.get_json() or {}
+
+        repo_id = data.get('repo_id')
+        git_url = data.get('git_url')
+        git_token = data.get('git_token')
+        custom_subdomain = data.get('subdomain')
+
+        # --- Option A: look up repo config from MongoDB using repo_id ---
+        if repo_id:
+            repo_id = str(repo_id)
+            if not re.match(r'^\d+$', repo_id):
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid repo_id format. Expected numeric identifier.'
+                }), 400
+
+            repo_doc = get_repo_by_id(repo_id)
+            project_id_for_debug = repo_doc.get('project_id') if repo_doc else None
+
+            if not repo_doc:
+                return jsonify({
+                    'success': False,
+                    'message': f'Repository {repo_id} not found'
+                }), 404
+
+            git_token = repo_doc.get('git_token')
+            git_url = repo_doc.get('git_url')
+
+        # --- Validate required fields ---
+        if not git_url:
+            return jsonify({
+                'success': False,
+                'message': (
+                    'git_url is required '
+                    '(or provide a repo_id to look up from the database)'
+                )
+            }), 400
+
+        if not git_token:
+            return jsonify({
+                'success': False,
+                'message': (
+                    'git_token is required '
+                    '(or provide a repo_id to look up from the database)'
+                )
+            }), 400
+
+        # --- Parse the GitHub URL ---
+        owner, repo_name = parse_git_url(git_url)
+        if not owner or not repo_name:
+            return jsonify({
+                'success': False,
+                'message': f'Could not parse git_url: {git_url}'
+            }), 400
+
+        repo_full_name = f"{owner}/{repo_name}"
+        project_name = sanitize_project_name(custom_subdomain or repo_name)
+
+        # Set logging context
+        tag = build_project_tag(repo_id or repo_name)
+        log_token = current_project_tag.set(tag)
+
+        try:
+            # 1. Download repository from GitHub
+            temp_dir = download_github_repo(git_token, repo_full_name, 'main')
+
+            if not temp_dir:
+                return deployment_error_response(
+                    'Failed to download repository from GitHub',
+                    status_code=500,
+                    project_id=project_id_for_debug
+                )
+
+            try:
+                # 2. Build and deploy to sycord server
+                result = deploy_to_sycord(temp_dir, project_name)
+
+                if not result['success']:
+                    return deployment_error_response(
+                        'Deployment to sycord server failed',
+                        error=result.get('error'),
+                        status_code=500,
+                        project_id=project_id_for_debug
+                    )
+
+                # 3. Create a Cloudflare DNS CNAME record pointing to this
+                #    server (skipped when CLOUDFLARE_ZONE_ID is not configured)
+                dns_result = None
+                custom_url = None
+
+                if CLOUDFLARE_ZONE_ID:
+                    dns_result = create_cloudflare_dns_record(project_name, SERVER_HOST)
+                    if dns_result:
+                        custom_url = dns_result.get('url')
+                else:
+                    logger.warning(
+                        "CLOUDFLARE_ZONE_ID not set – skipping DNS record creation"
+                    )
+
+                return jsonify({
+                    'success': True,
+                    'message': f'Deployment successful! Project: {project_name}',
+                    'project_name': project_name,
+                    'url': result.get('url'),
+                    'local_url': result.get('local_url'),
+                    'custom_url': custom_url,
+                    'dns_record_created': dns_result is not None,
+                    'output': result.get('output')
+                }), 200
+
+            finally:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                logger.info(f"Cleaned up temporary directory: {temp_dir}")
+        finally:
+            current_project_tag.reset(log_token)
+
+    except Exception as e:
+        logger.error(f"Deploy error: {e}")
+        return deployment_error_response(
+            'Deployment failed',
+            error=str(e),
+            status_code=500,
+            project_id=project_id_for_debug
+        )
 
 
 if __name__ == '__main__':
     # Check if required environment variables are set or still at defaults
-    config_errors = []
+    config_warnings = []
 
-    # Check for empty values
+    # Cloudflare credentials are optional (only needed for DNS)
     if not CLOUDFLARE_API_TOKEN:
-        config_errors.append("CLOUDFLARE_API_TOKEN not set")
+        config_warnings.append("CLOUDFLARE_API_TOKEN not set – DNS record creation disabled")
+    if not CLOUDFLARE_ZONE_ID:
+        config_warnings.append("CLOUDFLARE_ZONE_ID not set – DNS record creation disabled")
 
-    # Check for default values
+    # Check for default placeholder values
     defaults = {
-        "CLOUDFLARE_API_TOKEN": "your_cloudflare_api_token",
-        "CLOUDFLARE_ACCOUNT_ID": "your_cloudflare_account_id",
         "MONGO_URI": "mongodb+srv://user:password@cluster.mongodb.net/?appName=Cluster"
     }
 
+    config_errors = []
     for key, default_val in defaults.items():
         val = os.getenv(key)
         if val == default_val:
@@ -1549,13 +1979,16 @@ if __name__ == '__main__':
             logger.error(f"- {error}")
         logger.error("Please edit the .env file with your actual credentials.")
         exit(1)
-    
-    if not CLOUDFLARE_PROJECT_NAME:
-        logger.warning("CLOUDFLARE_PROJECT_NAME not set. Deployment will fail.")
-    
+
+    for warning in config_warnings:
+        logger.warning(warning)
+
+    logger.info(f"Deployments directory: {DEPLOYMENTS_DIR}")
+    logger.info(f"Server host: {SERVER_HOST}")
+
     # Run Flask app
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('DEBUG', 'False').lower() == 'true'
-    
-    logger.info(f"Starting Flask server on port {port}")
+
+    logger.info(f"Starting Sycord Deployment Server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
