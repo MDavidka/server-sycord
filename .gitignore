@@ -34,5 +34,8 @@ Thumbs.db
 tmp/
 temp/
 
+# Node.js
+node_modules/
+
 # Deployed sites
 deployments/
