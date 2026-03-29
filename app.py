@@ -9,6 +9,7 @@ from collections import deque
 from threading import Lock
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory
+from werkzeug.middleware.proxy_fix import ProxyFix
 from pymongo import MongoClient
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -118,6 +119,8 @@ def deployment_error_response(message, error=None, status_code=500, project_id=N
 
 
 app = Flask(__name__)
+# Tell Flask it is behind a proxy, to trust X-Forwarded-* headers.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # MongoDB configuration
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
@@ -1267,6 +1270,10 @@ def index():
 def route_subdomain():
     """Route requests from a custom subdomain to the deployed site."""
     host = request.headers.get('Host', '')
+    # Strip any port number that might be present (e.g. during local testing or from proxy)
+    if ':' in host:
+        host = host.split(':', 1)[0]
+
     # Check if this is a request to a deployed site subdomain
     # The format should be <project_name>.<CLOUDFLARE_DOMAIN>
     if host and CLOUDFLARE_DOMAIN in host:
