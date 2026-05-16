@@ -42,20 +42,7 @@ if [ "$EUID" -eq 0 ]; then
     print_warning "Running as root. Consider running as a regular user."
 fi
 
-# Step 1: Check for Python
-print_status "Checking Python installation..."
-if command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-    print_success "Python3 found: $(python3 --version)"
-elif command -v python &> /dev/null; then
-    PYTHON_CMD="python"
-    print_success "Python found: $(python --version)"
-else
-    print_error "Python not found. Please install Python 3.8 or higher."
-    exit 1
-fi
-
-# Step 2: Check for Node.js and npm
+# Step 1: Check for Node.js and npm
 print_status "Checking Node.js installation..."
 INSTALL_NODE=true
 
@@ -64,11 +51,11 @@ if command -v node &> /dev/null; then
     # Extract major version
     NODE_MAJOR=$(echo "$NODE_VERSION" | cut -d'v' -f2 | cut -d'.' -f1)
 
-    if [ "$NODE_MAJOR" -ge 20 ]; then
+    if [ "$NODE_MAJOR" -ge 18 ]; then
         print_success "Node.js found: $NODE_VERSION"
         INSTALL_NODE=false
     else
-        print_warning "Node.js found ($NODE_VERSION) but is older than v20. Updating..."
+        print_warning "Node.js found ($NODE_VERSION) but is older than v18. Updating..."
     fi
 else
     print_warning "Node.js not found. Installing Node.js..."
@@ -142,7 +129,7 @@ if [ "$INSTALL_NODE" = true ]; then
     fi
 fi
 
-# Step 3: Check for npm
+# Step 2: Check for npm
 print_status "Checking npm installation..."
 if command -v npm &> /dev/null; then
     print_success "npm found: $(npm --version)"
@@ -151,32 +138,15 @@ else
     exit 1
 fi
 
-# Step 4: Create virtual environment if not exists
-print_status "Setting up Python virtual environment..."
-if [ ! -d "venv" ]; then
-    $PYTHON_CMD -m venv venv
-    print_success "Virtual environment created"
-else
-    print_status "Virtual environment already exists"
-fi
-
-# Step 5: Activate virtual environment and install dependencies
-print_status "Installing Python dependencies..."
-source venv/bin/activate
-
-if ! pip install --upgrade pip; then
-    print_error "Failed to upgrade pip"
+# Step 3: Install Node dependencies
+print_status "Installing Node dependencies..."
+if ! npm install; then
+    print_error "Failed to install Node dependencies"
     exit 1
 fi
+print_success "Node dependencies installed"
 
-if ! pip install -r requirements.txt; then
-    print_error "Failed to install Python dependencies"
-    exit 1
-fi
-
-print_success "Python dependencies installed"
-
-# Step 6: Check for .env file
+# Step 4: Check for .env file
 print_status "Checking environment configuration..."
 if [ ! -f ".env" ]; then
     if [ -f ".env.example" ]; then
@@ -211,7 +181,7 @@ if grep -q "your_cloudflare_api_token" .env || \
     exit 1
 fi
 
-# Step 7: Start the server
+# Step 5: Start the server
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║                   Starting M1 Instance                      ║"
@@ -219,8 +189,8 @@ echo "╚═══════════════════════�
 echo ""
 
 print_status "Starting Sycord Deployment Server..."
-print_status "Access the UI at: http://localhost:${PORT:-5000}"
+print_status "Access the UI at: http://localhost:${PORT:-4500}"
 echo ""
 
-# Run the Flask application
-$PYTHON_CMD app.py
+# Run the Node application
+npm start

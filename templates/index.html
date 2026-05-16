@@ -507,6 +507,7 @@
     result.className = 'deploy-result';
     result.style.display = 'none';
     renderRepos();
+    startLogsStream();
   }
 
   /* ── Sites ──────────────────────────────────────────── */
@@ -523,41 +524,63 @@
 
   /* ── Logs ───────────────────────────────────────────── */
 
-  let prevLogsKey = '';
+  let logSource = null;
 
-  async function fetchLogs() {
-    try {
-      const params = selectedRepo
-        ? '?project_id=' + encodeURIComponent(selectedRepo.repo_id) + '&limit=300'
-        : '?limit=300';
-      const res = await fetch('/api/logs' + params);
-      const data = await res.json();
-      if (!data.success) return;
-      const logs = data.logs || [];
-      const key = logs.length + '|' + (logs[logs.length - 1] || '');
-      if (key === prevLogsKey) return;
-      prevLogsKey = key;
-      renderLogs(logs);
-    } catch {}
+  function sanitizeProjectName(name) {
+    if (!name) return 'unnamed-project';
+    return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').substring(0, 63);
   }
 
-  function renderLogs(logs) {
-    const body = $('#consoleBody');
-    const atBottom = autoScroll;
+  function startLogsStream() {
+    if (logSource) {
+      logSource.close();
+      logSource = null;
+    }
 
-    if (!logs.length) {
-      body.innerHTML = '<div class="log-line log-info">no logs yet…</div>';
+    const body = $('#consoleBody');
+    body.innerHTML = ''; // Clear logs
+
+    if (!selectedRepo) {
+      body.innerHTML = '<div class="log-line log-info">waiting for logs…</div>';
       return;
     }
 
-    body.innerHTML = logs.map(line => {
-      let cls = 'log-line log-info';
-      const u = line.toUpperCase();
-      if (u.includes('[ERROR]') || u.includes('ERROR:'))    cls = 'log-line log-error';
-      else if (u.includes('[WARN') || u.includes('WARNING')) cls = 'log-line log-warning';
-      else if (u.includes('SUCCESS') || u.includes('✓'))    cls = 'log-line log-success';
-      return `<div class="${cls}">${escapeHtml(line)}</div>`;
-    }).join('');
+    const appName = sanitizeProjectName(selectedRepo.name);
+    logSource = new EventSource('/api/logs/' + encodeURIComponent(appName));
+
+    logSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.log) {
+          appendLog(data.log);
+        }
+      } catch (e) {}
+    };
+
+    logSource.onerror = () => {
+      // Reconnects automatically, but we can visually indicate
+    };
+  }
+
+  function appendLog(line) {
+    const body = $('#consoleBody');
+    const atBottom = autoScroll;
+    
+    let cls = 'log-line log-info';
+    const u = line.toUpperCase();
+    if (u.includes('[ERROR]') || u.includes('ERROR:'))    cls = 'log-line log-error';
+    else if (u.includes('[WARN') || u.includes('WARNING')) cls = 'log-line log-warning';
+    else if (u.includes('SUCCESS') || u.includes('✓'))    cls = 'log-line log-success';
+    
+    const div = document.createElement('div');
+    div.className = cls;
+    div.textContent = line;
+    body.appendChild(div);
+
+    // Keep only last 300 lines to prevent DOM bloat
+    while (body.children.length > 300) {
+      body.removeChild(body.firstChild);
+    }
 
     if (atBottom) {
       body.scrollTop = body.scrollHeight;
@@ -598,7 +621,7 @@
         result.innerHTML = msg;
         fetchSites();
         fetchHealth();
-        fetchLogs();
+        startLogsStream();
       } else {
         btn.className = 'deploy-btn error';
         btn.textContent = '✗ failed';
@@ -646,9 +669,8 @@
   fetchHealth();
   fetchRepos();
   fetchSites();
-  fetchLogs();
+  startLogsStream();
 
-  setInterval(fetchLogs,   2000);
   setInterval(fetchSites, 10000);
   setInterval(fetchHealth, 15000);
 </script>

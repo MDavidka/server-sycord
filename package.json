@@ -1,0 +1,29 @@
+{
+  "name": "project",
+  "version": "1.0.0",
+  "description": "A Flask server (M1 Instance) that automatically deploys content from GitHub repositories to Cloudflare Pages using Wrangler CLI.",
+  "main": "runner.js",
+  "scripts": {
+    "start": "node runner.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://x-access-token:ghs_JskLYLKu6RgFYBlgzmTE2xhjw6B7M00KmlmU@github.com/MDavidka/server-sycord.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/MDavidka/server-sycord/issues"
+  },
+  "homepage": "https://github.com/MDavidka/server-sycord#readme",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "http-proxy-middleware": "^4.0.0",
+    "mongodb": "^7.2.0",
+    "node-fetch": "^3.3.2"
+  }
+}
